@@ -1,0 +1,13 @@
+// ==UserScript==
+// @name         Roll20 Campaign exporter
+// @namespace    http://tampermonkey.net/
+// @version      0.1
+// @description  Export an entire Roll20 Campaign
+// @author       KaKaRoTo
+// @match        https://app.roll20.net/editor/
+// @grant        none
+// @require	 https://raw.githubusercontent.com/Stuk/jszip/master/dist/jszip.min.js
+// @require	 https://raw.githubusercontent.com/eligrey/FileSaver.js/master/dist/FileSaver.min.js
+// @require 	 https://ajax.googleapis.com/ajax/libs/jquery/3.4.0/jquery.min.js
+// ==/UserScript==
+

@@ -1,0 +1,132 @@
+import uuid
+
+class Campaign:
+    def __init__(self, title):
+        self.title = title
+        self.campaign = []
+        self._pending_operations = []
+
+    def newPendingOperation(self):
+        id = str(uuid.uuid4())
+        self._pending_operations.append(id)
+        return id
+
+    def hasPendingOperation(self):
+        return self._pending_operations.length > 0
+
+    def completedOperation(self, id):
+        self._pending_operations.remove(id)
+        console.log("Completed Operation ", id, " we have ", self._pending_operations.length, " remaining operations")
+        return not self.hasPendingOperation()
+
+    def parsePage(self, page):
+        data = page.toJSON()
+        data.zorder = data.zorder.split(",")
+        data.graphics = page.thegraphics.toJSON() if page.thegraphics? else []
+        data.texts = page.thetexts.toJSON() if page.thetexts? else []
+        data.paths = page.thepaths.toJSON() if page.thepaths? else []
+        for path in data.paths:
+            path.path = JSON.parse(path.path)
+        return data
+
+    def parsePages(self, pages):
+        array = []
+        for page in pages.models:
+            array.append(self.parsePage(page))
+        console.log("Finished parsing pages.")
+        return array
+
+    def updateModel(self, data, key, blob, id, cb):
+        console.log ("Received ", key, " for ", data.name)
+        if key in ["bio", "gmnotes", "notes"]:
+            data[key] = unescape(blob)
+        elif key == "defaulttoken":
+            data[key] = JSON.parse(blob)
+        else:
+            data[key] = blob
+        if self.completedOperation(id) and cb:
+            cb()
+
+    
+    def parseCharacter(self, character, cb):
+        data = character.toJSON()
+        if data.bio != "":
+            del data.bio
+            bio_id = self.newPendingOperation()
+            character._getLatestBlob("bio", def(blob):
+                                         self.updateModel(data, "bio", blob, bio_id, cb)
+                                     )
+        if data.gmnotes != "":
+            del data.gmnotes
+            gmnotes_id = self.newPendingOperation()
+            character._getLatestBlob("gmnotes", def(blob):
+                                         self.updateModel(data, "gmnotes", blob, gmnotes_id, cb)
+                                     )
+        if data.defaulttoken != "":
+            del data.defaulttoken
+            token_id = self.newPendingOperation()
+            character._getLatestBlob("defaulttoken", def(blob):
+                                         self.updateModel(data, "defaulttoken", blob, token_id, cb)
+                                     )
+        data.attributes = character.attribs.toJSON()
+        data.abilities = character.abilities.toJSON()
+        return data
+
+    def parseCharacters(self, characters, cb):
+        array = []
+        for character in characters.models:
+            array.append(self.parseCharacter(character, cb))
+        console.log("Finished parsing characters.")
+        return array
+
+    def parseHandout(self, handout, cb):
+        data = handout.toJSON()
+        if data.notes != "":
+            del data.notes
+            notes_id = self.newPendingOperation()
+            handout._getLatestBlob("notes", def(blob):
+                                       self.updateModel(data, "notes", blob, notes_id, cb)
+                                   )
+        if data.gmnotes != "":
+            del data.gmnotes
+            gmnotes_id = self.newPendingOperation()
+            handout._getLatestBlob("gmnotes", def(blob):
+                                       self.updateModel(data, "gmnotes", blob, gmnotes_id, cb)
+                                   )
+        return data
+
+    def parseHandouts(self, handouts, cb):
+        array = []
+        for handout in handouts.models:
+            array.append(self.parseHandout(handout, cb))
+        console.log("Finished parsing handouts.")
+        return array
+
+    def parseCampaign(self, cb):
+        result = window.Campaign.toJSON()
+        done = def():
+            if cb:
+                cb(result)
+        # Make sure we don't get callback called before we finish parsing all the items
+        id = self.newPendingOperation()
+        result.handouts = self.parseHandouts(window.Campaign.handouts, done)
+        result.characters = self.parseCharacters(window.Campaign.characters, done)
+        result.pages = self.parsePages(window.Campaign.pages)
+        result.journalfolder = JSON.parse(result.journalfolder)
+        result.turnorder = JSON.parse(result.turnorder)
+        if self.completedOperation(id):
+            done()
+        self.campaign = result
+        return result
+
+    def saveCampaign(self, filename=None):
+        blob = new Blob([JSON.stringify(self.campaign, undefined, 4)], {"type": 'text/json'})
+        saveAs(blob, filename if filename else (self.title + ".json"))
+
+    def exportCampaign(self, filename=None):
+        save = def():
+            self.saveCampaign(filename)
+        self.parseCampaign(save)
+
+console.log("Roll20 Campaign exporter loaded")
+window.R20Exporter = new Campaign($("head title").text().trim().replace(" | Roll20", ""))
