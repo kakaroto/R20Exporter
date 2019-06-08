@@ -1,5 +1,10 @@
 import uuid
 
+def toJSON(obj):
+    return JSON.stringify(obj, undefined, 4)
+def toBlob(obj):
+    return new Blob([toJSON(obj)], {"type": 'text/json'})
+
 class Campaign:
     def __init__(self, title):
         self.title = title
@@ -104,6 +109,7 @@ class Campaign:
 
     def parseCampaign(self, cb):
         result = window.Campaign.toJSON()
+        self.campaign = result
         done = def():
             if cb:
                 cb(result)
@@ -116,17 +122,77 @@ class Campaign:
         result.turnorder = JSON.parse(result.turnorder)
         if self.completedOperation(id):
             done()
-        self.campaign = result
         return result
 
-    def saveCampaign(self, filename=None):
-        blob = new Blob([JSON.stringify(self.campaign, undefined, 4)], {"type": 'text/json'})
-        saveAs(blob, filename if filename else (self.title + ".json"))
+    def saveCampaign(self, campaign, filename=None):
+        saveAs(toBlob(campaign), filename if filename else (self.title + ".json"))
 
-    def exportCampaign(self, filename=None):
+    def exportCampaignJson(self, filename=None):
         save = def():
-            self.saveCampaign(filename)
-        self.parseCampaign(save)
+            self.saveCampaign(campaign, filename)
+        self.campaign = self.parseCampaign(save)
+
+    def exportCampaign(self):
+        self.exportCampaignJson()
+
+    def downloadResource(self, url, cb, finallyCB=None):
+        id = self.newPendingOperation()
+        fetch(url).then(def(response):
+            if response.status == 200 or response.status == 0:
+                return Promise.resolve(response.blob());
+            else:
+                return Promise.reject(new Error(response.statusText));
+        ).then(cb).finally(def(error):
+                self.completedOperation(id)
+                if finallyCB:
+                    finallyCB()
+        )
+
+    def saveCampaignZip(self, campaign, filename=None):
+        zip = new JSZip()
+        zip.file('campaign.json', toJSON(campaign))
+        self.zip = zip
+        saveZip = def(blob):
+            saveAs(blob, filename if filename else (self.title + ".zip"))
+        checkZipDone = def():
+            if not self.hasPendingOperation():
+                zip.generateAsync({"type":"blob"}, def (metadata):
+                                      console.log("progression: " + metadata.percent + " %")
+                                  ).then(saveZip).catch(def (error):
+                                                            console.log("Error generating zip : ", error)
+                                                        )
+        makeAddBlobToZip = def(folder, filename):
+            return def(blob):
+                console.log("Got blob for ", filename, " : ", blob)
+                folder.file(filename, blob)
+                checkZipDone()
+                                          
+        if campaign.characters.length > 0:
+            characters = zip.folder("characters")
+            names = []
+            for char in campaign.characters:
+                name = char.name
+                idx = 1
+                while name in names:
+                    name = char.name + "(" + idx + ")"
+                    idx += 1
+                names.append(name)
+                char_dir = characters.folder(name)
+                char_dir.file("character.json", toBlob(char))
+                if (char.avatar? "") != "":
+                    self.downloadResource(char.avatar, makeAddBlobToZip(char_dir, "avatar.png"), checkZipDone)
+                if char.defaulttoken? and (char.defaulttoken.imgsrc? "") != "":
+                    self.downloadResource(char.defaulttoken.imgsrc, makeAddBlobToZip(char_dir, "token.png"), checkZipDone)
+                if (char.bio? "") != "":
+                    char_dir.file("bio.html", new Blob([char.bio]))
+                if (char.gmnotes? "") != "":
+                    char_dir.file("gmnotes.html", new Blob([char.gmnotes]))
+        checkZipDone()
+
+    def exportCampaignZip(self, filename=None):
+        save = def(campaign):
+            self.saveCampaignZip(campaign, filename)
+        self.campaign = self.parseCampaign(save)
 
 console.log("Roll20 Campaign exporter loaded")
 window.R20Exporter = new Campaign($("head title").text().trim().replace(" | Roll20", ""))

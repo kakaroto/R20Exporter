@@ -4072,6 +4072,24 @@ var str = ρσ_str, repr = ρσ_repr;;
 
         var uuid = ρσ_modules.uuid;
 
+        function toJSON(obj) {
+            return JSON.stringify(obj, undefined, 4);
+        };
+        if (!toJSON.__argnames__) Object.defineProperties(toJSON, {
+            __argnames__ : {value: ["obj"]}
+        });
+
+        function toBlob(obj) {
+            return new Blob(ρσ_list_decorate([ toJSON(obj) ]), (function(){
+                var ρσ_d = {};
+                ρσ_d["type"] = "text/json";
+                return ρσ_d;
+            }).call(this));
+        };
+        if (!toBlob.__argnames__) Object.defineProperties(toBlob, {
+            __argnames__ : {value: ["obj"]}
+        });
+
         function Campaign() {
             if (this.ρσ_object_id === undefined) Object.defineProperty(this, "ρσ_object_id", {"value":++ρσ_object_counter});
             Campaign.prototype.__init__.apply(this, arguments);
@@ -4276,6 +4294,7 @@ var str = ρσ_str, repr = ρσ_repr;;
             var self = this;
             var result, done, id;
             result = window.Campaign.toJSON();
+            self.campaign = result;
             done = function () {
                 if (cb) {
                     cb(result);
@@ -4290,7 +4309,6 @@ var str = ρσ_str, repr = ρσ_repr;;
             if (self.completedOperation(id)) {
                 done();
             }
-            self.campaign = result;
             return result;
         };
         if (!Campaign.prototype.parseCampaign.__argnames__) Object.defineProperties(Campaign.prototype.parseCampaign, {
@@ -4298,28 +4316,23 @@ var str = ρσ_str, repr = ρσ_repr;;
         });
         Campaign.prototype.saveCampaign = function saveCampaign() {
             var self = this;
-            var filename = (arguments[0] === undefined || ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? saveCampaign.__defaults__.filename : arguments[0];
+            var campaign = ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true) ? undefined : arguments[0];
+            var filename = (arguments[1] === undefined || ( 1 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? saveCampaign.__defaults__.filename : arguments[1];
             var ρσ_kwargs_obj = arguments[arguments.length-1];
             if (ρσ_kwargs_obj === null || typeof ρσ_kwargs_obj !== "object" || ρσ_kwargs_obj [ρσ_kwargs_symbol] !== true) ρσ_kwargs_obj = {};
             if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "filename")){
                 filename = ρσ_kwargs_obj.filename;
             }
-            var blob;
-            blob = new Blob(ρσ_list_decorate([ JSON.stringify(self.campaign, undefined, 4) ]), (function(){
-                var ρσ_d = {};
-                ρσ_d["type"] = "text/json";
-                return ρσ_d;
-            }).call(this));
-            saveAs(blob, (filename) ? filename : self.title + ".json");
+            saveAs(toBlob(campaign), (filename) ? filename : self.title + ".json");
         };
         if (!Campaign.prototype.saveCampaign.__defaults__) Object.defineProperties(Campaign.prototype.saveCampaign, {
             __defaults__ : {value: {filename:null}},
             __handles_kwarg_interpolation__ : {value: true},
-            __argnames__ : {value: ["filename"]}
+            __argnames__ : {value: ["campaign", "filename"]}
         });
-        Campaign.prototype.exportCampaign = function exportCampaign() {
+        Campaign.prototype.exportCampaignJson = function exportCampaignJson() {
             var self = this;
-            var filename = (arguments[0] === undefined || ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? exportCampaign.__defaults__.filename : arguments[0];
+            var filename = (arguments[0] === undefined || ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? exportCampaignJson.__defaults__.filename : arguments[0];
             var ρσ_kwargs_obj = arguments[arguments.length-1];
             if (ρσ_kwargs_obj === null || typeof ρσ_kwargs_obj !== "object" || ρσ_kwargs_obj [ρσ_kwargs_symbol] !== true) ρσ_kwargs_obj = {};
             if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "filename")){
@@ -4327,11 +4340,184 @@ var str = ρσ_str, repr = ρσ_repr;;
             }
             var save;
             save = function () {
-                self.saveCampaign(filename);
+                self.saveCampaign(campaign, filename);
             };
-            self.parseCampaign(save);
+            self.campaign = self.parseCampaign(save);
         };
-        if (!Campaign.prototype.exportCampaign.__defaults__) Object.defineProperties(Campaign.prototype.exportCampaign, {
+        if (!Campaign.prototype.exportCampaignJson.__defaults__) Object.defineProperties(Campaign.prototype.exportCampaignJson, {
+            __defaults__ : {value: {filename:null}},
+            __handles_kwarg_interpolation__ : {value: true},
+            __argnames__ : {value: ["filename"]}
+        });
+        Campaign.prototype.exportCampaign = function exportCampaign() {
+            var self = this;
+            self.exportCampaignJson();
+        };
+        Campaign.prototype.downloadResource = function downloadResource() {
+            var self = this;
+            var url = ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true) ? undefined : arguments[0];
+            var cb = ( 1 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true) ? undefined : arguments[1];
+            var finallyCB = (arguments[2] === undefined || ( 2 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? downloadResource.__defaults__.finallyCB : arguments[2];
+            var ρσ_kwargs_obj = arguments[arguments.length-1];
+            if (ρσ_kwargs_obj === null || typeof ρσ_kwargs_obj !== "object" || ρσ_kwargs_obj [ρσ_kwargs_symbol] !== true) ρσ_kwargs_obj = {};
+            if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "finallyCB")){
+                finallyCB = ρσ_kwargs_obj.finallyCB;
+            }
+            var id;
+            id = self.newPendingOperation();
+            fetch(url).then((function() {
+                var ρσ_anonfunc = function (response) {
+                    if ((response.status === 200 || typeof response.status === "object" && ρσ_equals(response.status, 200)) || (response.status === 0 || typeof response.status === "object" && ρσ_equals(response.status, 0))) {
+                        return Promise.resolve(response.blob());
+                    } else {
+                        return Promise.reject(new Error(response.statusText));
+                    }
+                };
+                if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                    __argnames__ : {value: ["response"]}
+                });
+                return ρσ_anonfunc;
+            })()).then(cb).finally((function() {
+                var ρσ_anonfunc = function (error) {
+                    self.completedOperation(id);
+                    if (finallyCB) {
+                        finallyCB();
+                    }
+                };
+                if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                    __argnames__ : {value: ["error"]}
+                });
+                return ρσ_anonfunc;
+            })());
+        };
+        if (!Campaign.prototype.downloadResource.__defaults__) Object.defineProperties(Campaign.prototype.downloadResource, {
+            __defaults__ : {value: {finallyCB:null}},
+            __handles_kwarg_interpolation__ : {value: true},
+            __argnames__ : {value: ["url", "cb", "finallyCB"]}
+        });
+        Campaign.prototype.saveCampaignZip = function saveCampaignZip() {
+            var self = this;
+            var campaign = ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true) ? undefined : arguments[0];
+            var filename = (arguments[1] === undefined || ( 1 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? saveCampaignZip.__defaults__.filename : arguments[1];
+            var ρσ_kwargs_obj = arguments[arguments.length-1];
+            if (ρσ_kwargs_obj === null || typeof ρσ_kwargs_obj !== "object" || ρσ_kwargs_obj [ρσ_kwargs_symbol] !== true) ρσ_kwargs_obj = {};
+            if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "filename")){
+                filename = ρσ_kwargs_obj.filename;
+            }
+            var zip, saveZip, checkZipDone, makeAddBlobToZip, characters, names, name, idx, char_dir, char;
+            zip = new JSZip;
+            zip.file("campaign.json", toJSON(campaign));
+            self.zip = zip;
+            saveZip = (function() {
+                var ρσ_anonfunc = function (blob) {
+                    saveAs(blob, (filename) ? filename : self.title + ".zip");
+                };
+                if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                    __argnames__ : {value: ["blob"]}
+                });
+                return ρσ_anonfunc;
+            })();
+            checkZipDone = function () {
+                if (!self.hasPendingOperation()) {
+                    zip.generateAsync((function(){
+                        var ρσ_d = {};
+                        ρσ_d["type"] = "blob";
+                        return ρσ_d;
+                    }).call(this), (function() {
+                        var ρσ_anonfunc = function (metadata) {
+                            console.log("progression: " + metadata.percent + " %");
+                        };
+                        if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                            __argnames__ : {value: ["metadata"]}
+                        });
+                        return ρσ_anonfunc;
+                    })()).then(saveZip).catch((function() {
+                        var ρσ_anonfunc = function (error) {
+                            console.log("Error generating zip : ", error);
+                        };
+                        if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                            __argnames__ : {value: ["error"]}
+                        });
+                        return ρσ_anonfunc;
+                    })());
+                }
+            };
+            makeAddBlobToZip = (function() {
+                var ρσ_anonfunc = function (folder, filename) {
+                    return (function() {
+                        var ρσ_anonfunc = function (blob) {
+                            console.log("Got blob for ", filename, " : ", blob);
+                            folder.file(filename, blob);
+                            checkZipDone();
+                        };
+                        if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                            __argnames__ : {value: ["blob"]}
+                        });
+                        return ρσ_anonfunc;
+                    })();
+                };
+                if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                    __argnames__ : {value: ["folder", "filename"]}
+                });
+                return ρσ_anonfunc;
+            })();
+            if (campaign.characters.length > 0) {
+                characters = zip.folder("characters");
+                names = ρσ_list_decorate([]);
+                var ρσ_Iter4 = ρσ_Iterable(campaign.characters);
+                for (var ρσ_Index4 = 0; ρσ_Index4 < ρσ_Iter4.length; ρσ_Index4++) {
+                    char = ρσ_Iter4[ρσ_Index4];
+                    name = char.name;
+                    idx = 1;
+                    while (ρσ_in(name, names)) {
+                        name = char.name + "(" + idx + ")";
+                        idx += 1;
+                    }
+                    names.append(name);
+                    char_dir = characters.folder(name);
+                    char_dir.file("character.json", toBlob(char));
+                    if ((ρσ_exists.e(char.avatar, "") !== "" && (typeof ρσ_exists.e(char.avatar, "") !== "object" || ρσ_not_equals(ρσ_exists.e(char.avatar, ""), "")))) {
+                        self.downloadResource(char.avatar, makeAddBlobToZip(char_dir, "avatar.png"), checkZipDone);
+                    }
+                    if (ρσ_exists.n(char.defaulttoken) && (ρσ_exists.e(char.defaulttoken.imgsrc, "") !== "" && (typeof ρσ_exists.e(char.defaulttoken.imgsrc, "") !== "object" || ρσ_not_equals(ρσ_exists.e(char.defaulttoken.imgsrc, ""), "")))) {
+                        self.downloadResource(char.defaulttoken.imgsrc, makeAddBlobToZip(char_dir, "token.png"), checkZipDone);
+                    }
+                    if ((ρσ_exists.e(char.bio, "") !== "" && (typeof ρσ_exists.e(char.bio, "") !== "object" || ρσ_not_equals(ρσ_exists.e(char.bio, ""), "")))) {
+                        char_dir.file("bio.html", new Blob(ρσ_list_decorate([ char.bio ])));
+                    }
+                    if ((ρσ_exists.e(char.gmnotes, "") !== "" && (typeof ρσ_exists.e(char.gmnotes, "") !== "object" || ρσ_not_equals(ρσ_exists.e(char.gmnotes, ""), "")))) {
+                        char_dir.file("gmnotes.html", new Blob(ρσ_list_decorate([ char.gmnotes ])));
+                    }
+                }
+            }
+            checkZipDone();
+        };
+        if (!Campaign.prototype.saveCampaignZip.__defaults__) Object.defineProperties(Campaign.prototype.saveCampaignZip, {
+            __defaults__ : {value: {filename:null}},
+            __handles_kwarg_interpolation__ : {value: true},
+            __argnames__ : {value: ["campaign", "filename"]}
+        });
+        Campaign.prototype.exportCampaignZip = function exportCampaignZip() {
+            var self = this;
+            var filename = (arguments[0] === undefined || ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? exportCampaignZip.__defaults__.filename : arguments[0];
+            var ρσ_kwargs_obj = arguments[arguments.length-1];
+            if (ρσ_kwargs_obj === null || typeof ρσ_kwargs_obj !== "object" || ρσ_kwargs_obj [ρσ_kwargs_symbol] !== true) ρσ_kwargs_obj = {};
+            if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "filename")){
+                filename = ρσ_kwargs_obj.filename;
+            }
+            var save;
+            save = (function() {
+                var ρσ_anonfunc = function (campaign) {
+                    self.saveCampaignZip(campaign, filename);
+                };
+                if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                    __argnames__ : {value: ["campaign"]}
+                });
+                return ρσ_anonfunc;
+            })();
+            self.campaign = self.parseCampaign(save);
+        };
+        if (!Campaign.prototype.exportCampaignZip.__defaults__) Object.defineProperties(Campaign.prototype.exportCampaignZip, {
             __defaults__ : {value: {filename:null}},
             __handles_kwarg_interpolation__ : {value: true},
             __argnames__ : {value: ["filename"]}
