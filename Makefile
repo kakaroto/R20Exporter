@@ -5,7 +5,7 @@ JS_FILES=src/roll20_exporter.js r20exporter.js
 
 all: $(JS_FILES)
 
-r20exporter.js: tampermonkey.header  src/roll20_exporter.js
+r20exporter.js: tampermonkey.header libs/StreamSaver.js src/roll20_exporter.js
 	cat $^ > $@
 
 build: all

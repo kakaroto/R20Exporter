@@ -8,9 +8,320 @@
 // @grant        none
 // @require	 https://raw.githubusercontent.com/Stuk/jszip/master/dist/jszip.min.js
 // @require	 https://raw.githubusercontent.com/eligrey/FileSaver.js/master/dist/FileSaver.min.js
+// @require	 https://raw.githubusercontent.com/jimmywarting/StreamSaver.js/master/StreamSaver.js
 // @require 	 https://ajax.googleapis.com/ajax/libs/jquery/3.4.0/jquery.min.js
 // ==/UserScript==
 
+/* global chrome location ReadableStream define MessageChannel TransformStream */
+
+;((name, definition) => {
+  typeof module !== 'undefined'
+    ? module.exports = definition()
+    : typeof define === 'function' && typeof define.amd === 'object'
+      ? define(definition)
+      : this[name] = definition()
+})('streamSaver', () => {
+  'use strict'
+
+  let mitmTransporter = null
+  let supportsTransferable = false
+  const test = fn => { try { fn() } catch (e) {} }
+  const ponyfill = window.WebStreamsPolyfill || {}
+  const once = { once: true }
+  const isSecureContext = window.isSecureContext
+  let useBlobFallback = /constructor/i.test(window.HTMLElement) || !!window.safari
+  const downloadStrategy = isSecureContext || 'MozAppearance' in document.documentElement.style
+    ? 'iframe'
+    : 'navigate'
+
+  const streamSaver = {
+    createWriteStream,
+    WritableStream: window.WritableStream || ponyfill.WritableStream,
+    supported: true,
+    version: { full: '2.0.0', major: 2, minor: 0, dot: 0 },
+    mitm: 'https://jimmywarting.github.io/StreamSaver.js/mitm.html?version=2.0.0'
+  }
+
+  /**
+   * create a hidden iframe and append it to the DOM (body)
+   *
+   * @param  {string} src page to load
+   * @return {HTMLIFrameElement} page to load
+   */
+  function makeIframe (src) {
+    if (!src) throw new Error('meh')
+    const iframe = document.createElement('iframe')
+    iframe.hidden = true
+    iframe.src = src
+    iframe.loaded = false
+    iframe.name = 'iframe'
+    iframe.isIframe = true
+    iframe.postMessage = (...args) => iframe.contentWindow.postMessage(...args)
+    iframe.addEventListener('load', () => {
+      iframe.loaded = true
+    }, once)
+    document.body.appendChild(iframe)
+    return iframe
+  }
+
+  /**
+   * create a popup that simulates the basic things
+   * of what a iframe can do
+   *
+   * @param  {string} src page to load
+   * @return {object}     iframe like object
+   */
+  function makePopup (src) {
+    const options = 'width=200,height=100'
+    const delegate = document.createDocumentFragment()
+    const popup = {
+      frame: window.open(src, 'popup', options),
+      loaded: false,
+      isIframe: false,
+      isPopup: true,
+      remove () { popup.frame.close() },
+      addEventListener (...args) { delegate.addEventListener(...args) },
+      dispatchEvent (...args) { delegate.dispatchEvent(...args) },
+      removeEventListener (...args) { delegate.removeEventListener(...args) },
+      postMessage (...args) { popup.frame.postMessage(...args) }
+    }
+
+    const onReady = evt => {
+      if (evt.source === popup.frame) {
+        popup.loaded = true
+        window.removeEventListener('message', onReady)
+        popup.dispatchEvent(new Event('load'))
+      }
+    }
+
+    window.addEventListener('message', onReady)
+
+    return popup
+  }
+
+  /**
+   * Destroys a channel and return null
+   *
+   * @param  {MessageChannel} channel [description]
+   * @return {null}         [description]
+   */
+  function destroyChannel (channel) {
+    channel.port1.onmessage = null
+    channel.port1.close()
+    channel.port2.close()
+    return null
+  }
+
+  try {
+    // We can't look for service worker since it may still work on http
+    !!new Response(new ReadableStream())
+  } catch (err) {
+    useBlobFallback = true
+  }
+
+  test(() => {
+    // Transfariable stream was first enabled in chrome v73 behind a flag
+    const { readable } = new TransformStream()
+    const mc = new MessageChannel()
+    mc.port1.postMessage(readable, [readable])
+    mc.port1.close()
+    mc.port2.close()
+    supportsTransferable = true
+    // Freeze TransformStream object (can only work with native)
+    Object.defineProperty(streamSaver, 'TransformStream', {
+      configurable: false,
+      writable: false,
+      value: TransformStream
+    })
+  })
+
+  function loadTransporter () {
+    if (!mitmTransporter) {
+      mitmTransporter = isSecureContext
+        ? makeIframe(streamSaver.mitm)
+        : makePopup(streamSaver.mitm)
+    }
+  }
+
+  /**
+   * @param  {string} filename filename that should be used
+   * @param  {object} options  [description]
+   * @param  {number} size     depricated
+   * @return {WritableStream}
+   */
+  function createWriteStream (filename, options, size) {
+    let opts = {
+      size: null,
+      pathname: null,
+      writableStrategy: undefined,
+      readableStrategy: undefined
+    }
+
+    // normalize arguments
+    if (Number.isFinite(options)) {
+      [ size, options ] = [ options, size ]
+      console.warn('[StreamSaver] Depricated pass an object as 2nd argument when creating a write stream')
+      opts.size = size
+      opts.writableStrategy = options
+    } else if (options && options.highWaterMark) {
+      console.warn('[StreamSaver] Depricated pass an object as 2nd argument when creating a write stream')
+      opts.size = size
+      opts.writableStrategy = options
+    } else {
+      opts = options || {}
+    }
+    if (!useBlobFallback) {
+      loadTransporter()
+
+      var bytesWritten = 0 // by StreamSaver.js (not the service worker)
+      var downloadUrl = null
+      var channel = new MessageChannel()
+
+      // Make filename RFC5987 compatible
+      filename = encodeURIComponent(filename.replace(/\//g, ':'))
+        .replace(/['()]/g, escape)
+        .replace(/\*/g, '%2A')
+
+      const response = {
+        transferringReadable: supportsTransferable,
+        pathname: opts.pathname || Math.random().toString().slice(-6) + '/' + filename,
+        headers: {
+          'Content-Type': 'application/octet-stream; charset=utf-8',
+          'Content-Disposition': "attachment; filename*=UTF-8''" + filename
+        }
+      }
+
+      if (opts.size) {
+        response.headers['Content-Length'] = opts.size
+      }
+
+      const args = [ response, '*', [ channel.port2 ] ]
+
+      if (supportsTransferable) {
+        const transformer = downloadStrategy === 'iframe' ? undefined : {
+          // This transformer & flush method is only used by insecure context.
+          transform (chunk, controller) {
+            bytesWritten += chunk.length
+            controller.enqueue(chunk)
+
+            if (downloadUrl) {
+              location.href = downloadUrl
+              downloadUrl = null
+            }
+          },
+          flush () {
+            if (downloadUrl) {
+              location.href = downloadUrl
+            }
+          }
+        }
+        var ts = new streamSaver.TransformStream(
+          transformer,
+          opts.writableStrategy,
+          opts.readableStrategy
+        )
+        const readableStream = ts.readable
+
+        channel.port1.postMessage({ readableStream }, [ readableStream ])
+      }
+
+      channel.port1.onmessage = evt => {
+        // Service worker sent us a link that we should open.
+        if (evt.data.download) {
+          // Special treatment for popup...
+          if (downloadStrategy === 'navigate') {
+            mitmTransporter.remove()
+            mitmTransporter = null
+            if (bytesWritten) {
+              location.href = evt.data.download
+            } else {
+              downloadUrl = evt.data.download
+            }
+          } else {
+            if (mitmTransporter.isPopup) {
+              mitmTransporter.remove()
+              // Special case for firefox, they can keep sw alive with fetch
+              if (downloadStrategy === 'iframe') {
+                makeIframe(streamSaver.mitm)
+              }
+            }
+
+            // We never remove this iframes b/c it can interrupt saveAs
+            makeIframe(evt.data.download)
+          }
+        }
+      }
+
+      if (mitmTransporter.loaded) {
+        mitmTransporter.postMessage(...args)
+      } else {
+        mitmTransporter.addEventListener('load', () => {
+          mitmTransporter.postMessage(...args)
+        }, once)
+      }
+    }
+
+    let chunks = []
+
+    return (!useBlobFallback && ts && ts.writable) || new streamSaver.WritableStream({
+      start () {
+        // is called immediately, and should perform any actions
+        // necessary to acquire access to the underlying sink.
+        // If this process is asynchronous, it can return a promise
+        // to signal success or failure.
+        // return setupChannel()
+      },
+      write (chunk) {
+        if (useBlobFallback) {
+          // Safari... The new IE6
+          // https://github.com/jimmywarting/StreamSaver.js/issues/69
+          //
+          // even doe it has everything it fails to download anything
+          // that comes from the service worker..!
+          chunks.push(chunk)
+          return
+        }
+
+        // is called when a new chunk of data is ready to be written
+        // to the underlying sink. It can return a promise to signal
+        // success or failure of the write operation. The stream
+        // implementation guarantees that this method will be called
+        // only after previous writes have succeeded, and never after
+        // close or abort is called.
+
+        // TODO: Kind of important that service worker respond back when
+        // it has been written. Otherwise we can't handle backpressure
+        // EDIT: Transfarable streams solvs this...
+        channel.port1.postMessage(chunk)
+        bytesWritten += chunk.length
+
+        if (downloadUrl) {
+          location.href = downloadUrl
+          downloadUrl = null
+        }
+      },
+      close () {
+        if (useBlobFallback) {
+          const blob = new Blob(chunks, { type: 'application/octet-stream; charset=utf-8' })
+          const link = document.createElement('a')
+          link.href = URL.createObjectURL(blob)
+          link.download = filename
+          link.click()
+          return
+        }
+        channel.port1.postMessage('end')
+        channel = destroyChannel(channel)
+      },
+      abort () {
+        chunks = []
+        channel.port1.postMessage('abort')
+        channel = destroyChannel(channel)
+      }
+    }, opts.writableStrategy)
+  }
+
+  return streamSaver
+});
 (function(){
     "use strict";
     var ρσ_iterator_symbol = (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") ? Symbol.iterator : "iterator-Symbol-5d0927e5554349048cf0e3762a228256";
@@ -4098,6 +4409,7 @@ var str = ρσ_str, repr = ρσ_repr;;
             var self = this;
             self.title = title;
             self.campaign = ρσ_list_decorate([]);
+            self.zip = null;
             self._pending_operations = ρσ_list_decorate([]);
         };
         if (!Campaign.prototype.__init__.__argnames__) Object.defineProperties(Campaign.prototype.__init__, {
@@ -4118,12 +4430,62 @@ var str = ρσ_str, repr = ρσ_repr;;
         };
         Campaign.prototype.completedOperation = function completedOperation(id) {
             var self = this;
-            self._pending_operations.remove(id);
+            try {
+                self._pending_operations.remove(id);
+            } catch (ρσ_Exception) {
+                ρσ_last_exception = ρσ_Exception;
+                {
+                } 
+            }
             console.log("Completed Operation ", id, " we have ", self._pending_operations.length, " remaining operations");
             return !self.hasPendingOperation();
         };
         if (!Campaign.prototype.completedOperation.__argnames__) Object.defineProperties(Campaign.prototype.completedOperation, {
             __argnames__ : {value: ["id"]}
+        });
+        Campaign.prototype.findID = function findID() {
+            var self = this;
+            var id = ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true) ? undefined : arguments[0];
+            var obj_type = (arguments[1] === undefined || ( 1 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? findID.__defaults__.obj_type : arguments[1];
+            var ρσ_kwargs_obj = arguments[arguments.length-1];
+            if (ρσ_kwargs_obj === null || typeof ρσ_kwargs_obj !== "object" || ρσ_kwargs_obj [ρσ_kwargs_symbol] !== true) ρσ_kwargs_obj = {};
+            if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "obj_type")){
+                obj_type = ρσ_kwargs_obj.obj_type;
+            }
+            var find_id, handout, page, char;
+            find_id = (function() {
+                var ρσ_anonfunc = function (o) {
+                    return (o.id === id || typeof o.id === "object" && ρσ_equals(o.id, id));
+                };
+                if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                    __argnames__ : {value: ["o"]}
+                });
+                return ρσ_anonfunc;
+            })();
+            if ((obj_type === "handout" || typeof obj_type === "object" && ρσ_equals(obj_type, "handout")) || obj_type === null) {
+                handout = self.campaign.handouts.find(find_id);
+                if ((typeof handout !== "undefined" && handout !== null)) {
+                    return handout;
+                }
+            }
+            if ((obj_type === "page" || typeof obj_type === "object" && ρσ_equals(obj_type, "page")) || obj_type === null) {
+                page = self.campaign.pages.find(find_id);
+                if ((typeof page !== "undefined" && page !== null)) {
+                    return page;
+                }
+            }
+            if ((obj_type === "character" || typeof obj_type === "object" && ρσ_equals(obj_type, "character")) || obj_type === null) {
+                char = self.campaign.characters.find(find_id);
+                if ((typeof char !== "undefined" && char !== null)) {
+                    return char;
+                }
+            }
+            return null;
+        };
+        if (!Campaign.prototype.findID.__defaults__) Object.defineProperties(Campaign.prototype.findID, {
+            __defaults__ : {value: {obj_type:null}},
+            __handles_kwarg_interpolation__ : {value: true},
+            __argnames__ : {value: ["id", "obj_type"]}
         });
         Campaign.prototype.parsePage = function parsePage(page) {
             var self = this;
@@ -4145,12 +4507,28 @@ var str = ρσ_str, repr = ρσ_repr;;
         });
         Campaign.prototype.parsePages = function parsePages(pages) {
             var self = this;
-            var array, page;
+            var array, id, makeCB, page;
             array = ρσ_list_decorate([]);
             var ρσ_Iter1 = ρσ_Iterable(pages.models);
             for (var ρσ_Index1 = 0; ρσ_Index1 < ρσ_Iter1.length; ρσ_Index1++) {
                 page = ρσ_Iter1[ρσ_Index1];
-                array.append(self.parsePage(page));
+                if (page.fullyLoaded) {
+                    array.append(self.parsePage(page));
+                } else {
+                    id = self.newPendingOperation();
+                    makeCB = (function() {
+                        var ρσ_anonfunc = function (a, i, p) {
+                            a.append(self.parsePage(p));
+                            self.completedOperation(i);
+                        };
+                        if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                            __argnames__ : {value: ["a", "i", "p"]}
+                        });
+                        return ρσ_anonfunc;
+                    })();
+                    page.fullyLoadPage();
+                    setTimeout(makeCB(array, id, page), 1e3);
+                }
             }
             console.log("Finished parsing pages.");
             return array;
@@ -4290,6 +4668,17 @@ var str = ρσ_str, repr = ρσ_repr;;
         if (!Campaign.prototype.parseHandouts.__argnames__) Object.defineProperties(Campaign.prototype.parseHandouts, {
             __argnames__ : {value: ["handouts", "cb"]}
         });
+        Campaign.prototype.loadArchivedPages = function loadArchivedPages() {
+            var self = this;
+            var page;
+            var ρσ_Iter4 = ρσ_Iterable(window.Campaign.pages.models);
+            for (var ρσ_Index4 = 0; ρσ_Index4 < ρσ_Iter4.length; ρσ_Index4++) {
+                page = ρσ_Iter4[ρσ_Index4];
+                if (!page.fullyLoaded) {
+                    page.fullyLoadPage();
+                }
+            }
+        };
         Campaign.prototype.parseCampaign = function parseCampaign(cb) {
             var self = this;
             var result, done, id;
@@ -4304,8 +4693,15 @@ var str = ρσ_str, repr = ρσ_repr;;
             result.handouts = self.parseHandouts(window.Campaign.handouts, done);
             result.characters = self.parseCharacters(window.Campaign.characters, done);
             result.pages = self.parsePages(window.Campaign.pages);
-            result.journalfolder = JSON.parse(result.journalfolder);
-            result.turnorder = JSON.parse(result.turnorder);
+            if ((result.jukeboxfolder !== "" && (typeof result.jukeboxfolder !== "object" || ρσ_not_equals(result.jukeboxfolder, "")))) {
+                result.jukeboxfolder = JSON.parse(result.jukeboxfolder);
+            }
+            if ((result.journalfolder !== "" && (typeof result.journalfolder !== "object" || ρσ_not_equals(result.journalfolder, "")))) {
+                result.journalfolder = JSON.parse(result.journalfolder);
+            }
+            if ((result.turnorder !== "" && (typeof result.turnorder !== "object" || ρσ_not_equals(result.turnorder, "")))) {
+                result.turnorder = JSON.parse(result.turnorder);
+            }
             if (self.completedOperation(id)) {
                 done();
             }
@@ -4316,19 +4712,18 @@ var str = ρσ_str, repr = ρσ_repr;;
         });
         Campaign.prototype.saveCampaign = function saveCampaign() {
             var self = this;
-            var campaign = ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true) ? undefined : arguments[0];
-            var filename = (arguments[1] === undefined || ( 1 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? saveCampaign.__defaults__.filename : arguments[1];
+            var filename = (arguments[0] === undefined || ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? saveCampaign.__defaults__.filename : arguments[0];
             var ρσ_kwargs_obj = arguments[arguments.length-1];
             if (ρσ_kwargs_obj === null || typeof ρσ_kwargs_obj !== "object" || ρσ_kwargs_obj [ρσ_kwargs_symbol] !== true) ρσ_kwargs_obj = {};
             if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "filename")){
                 filename = ρσ_kwargs_obj.filename;
             }
-            saveAs(toBlob(campaign), (filename) ? filename : self.title + ".json");
+            saveAs(toBlob(self.campaign), (filename) ? filename : self.title + ".json");
         };
         if (!Campaign.prototype.saveCampaign.__defaults__) Object.defineProperties(Campaign.prototype.saveCampaign, {
             __defaults__ : {value: {filename:null}},
             __handles_kwarg_interpolation__ : {value: true},
-            __argnames__ : {value: ["campaign", "filename"]}
+            __argnames__ : {value: ["filename"]}
         });
         Campaign.prototype.exportCampaignJson = function exportCampaignJson() {
             var self = this;
@@ -4340,7 +4735,7 @@ var str = ρσ_str, repr = ρσ_repr;;
             }
             var save;
             save = function () {
-                self.saveCampaign(campaign, filename);
+                self.saveCampaign(filename);
             };
             self.campaign = self.parseCampaign(save);
         };
@@ -4357,15 +4752,15 @@ var str = ρσ_str, repr = ρσ_repr;;
             var self = this;
             var url = ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true) ? undefined : arguments[0];
             var cb = ( 1 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true) ? undefined : arguments[1];
-            var finallyCB = (arguments[2] === undefined || ( 2 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? downloadResource.__defaults__.finallyCB : arguments[2];
+            var errorCB = (arguments[2] === undefined || ( 2 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? downloadResource.__defaults__.errorCB : arguments[2];
             var ρσ_kwargs_obj = arguments[arguments.length-1];
             if (ρσ_kwargs_obj === null || typeof ρσ_kwargs_obj !== "object" || ρσ_kwargs_obj [ρσ_kwargs_symbol] !== true) ρσ_kwargs_obj = {};
-            if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "finallyCB")){
-                finallyCB = ρσ_kwargs_obj.finallyCB;
+            if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "errorCB")){
+                errorCB = ρσ_kwargs_obj.errorCB;
             }
-            var id;
+            var id, promise;
             id = self.newPendingOperation();
-            fetch(url).then((function() {
+            promise = fetch(url).then((function() {
                 var ρσ_anonfunc = function (response) {
                     if ((response.status === 200 || typeof response.status === "object" && ρσ_equals(response.status, 200)) || (response.status === 0 || typeof response.status === "object" && ρσ_equals(response.status, 0))) {
                         return Promise.resolve(response.blob());
@@ -4377,11 +4772,23 @@ var str = ρσ_str, repr = ρσ_repr;;
                     __argnames__ : {value: ["response"]}
                 });
                 return ρσ_anonfunc;
-            })()).then(cb).finally((function() {
-                var ρσ_anonfunc = function (error) {
+            })()).then((function() {
+                var ρσ_anonfunc = function (blob) {
                     self.completedOperation(id);
-                    if (finallyCB) {
-                        finallyCB();
+                    if (cb) {
+                        cb(blob);
+                    }
+                };
+                if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                    __argnames__ : {value: ["blob"]}
+                });
+                return ρσ_anonfunc;
+            })()).catch((function() {
+                var ρσ_anonfunc = function (error) {
+                    console.log("Error downloading ", url, " : ", error);
+                    self.completedOperation(id);
+                    if (errorCB) {
+                        errorCB();
                     }
                 };
                 if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
@@ -4391,111 +4798,355 @@ var str = ρσ_str, repr = ρσ_repr;;
             })());
         };
         if (!Campaign.prototype.downloadResource.__defaults__) Object.defineProperties(Campaign.prototype.downloadResource, {
-            __defaults__ : {value: {finallyCB:null}},
+            __defaults__ : {value: {errorCB:null}},
             __handles_kwarg_interpolation__ : {value: true},
-            __argnames__ : {value: ["url", "cb", "finallyCB"]}
+            __argnames__ : {value: ["url", "cb", "errorCB"]}
         });
-        Campaign.prototype.saveCampaignZip = function saveCampaignZip() {
+        Campaign.prototype.downloadR20Resource = function downloadR20Resource() {
             var self = this;
-            var campaign = ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true) ? undefined : arguments[0];
-            var filename = (arguments[1] === undefined || ( 1 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? saveCampaignZip.__defaults__.filename : arguments[1];
+            var folder = ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true) ? undefined : arguments[0];
+            var prefix = ( 1 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true) ? undefined : arguments[1];
+            var url = ( 2 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true) ? undefined : arguments[2];
+            var finallyCB = ( 3 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true) ? undefined : arguments[3];
+            var try_files = (arguments[4] === undefined || ( 4 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? downloadR20Resource.__defaults__.try_files : arguments[4];
             var ρσ_kwargs_obj = arguments[arguments.length-1];
             if (ρσ_kwargs_obj === null || typeof ρσ_kwargs_obj !== "object" || ρσ_kwargs_obj [ρσ_kwargs_symbol] !== true) ρσ_kwargs_obj = {};
-            if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "filename")){
-                filename = ρσ_kwargs_obj.filename;
+            if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "try_files")){
+                try_files = ρσ_kwargs_obj.try_files;
             }
-            var zip, saveZip, checkZipDone, makeAddBlobToZip, characters, names, name, idx, char_dir, char;
-            zip = new JSZip;
-            zip.file("campaign.json", toJSON(campaign));
-            self.zip = zip;
-            saveZip = (function() {
+            var filename, new_url, errorCB;
+            filename = (ρσ_expr_temp = url.split("/"))[ρσ_expr_temp.length-1].split(".")[0];
+            if (try_files.length > 0) {
+                if (ρσ_in(filename, ρσ_list_decorate([ "original", "max", "med", "thumb" ]))) {
+                    new_url = url.replace("/" + filename + ".", "/" + try_files[0] + ".");
+                } else {
+                    new_url = url;
+                    try_files = ρσ_list_decorate([ "" ]);
+                }
+                errorCB = function () {
+                    self.downloadR20Resource(folder, prefix, url, finallyCB, try_files.slice(1));
+                };
+                self.downloadResource(new_url, self._makeAddBlobToZip(folder, prefix + ".png", finallyCB), errorCB);
+            } else {
+                console.log("Couldn't download ", url, " with any filename. Abandoning");
+                finallyCB();
+            }
+        };
+        if (!Campaign.prototype.downloadR20Resource.__defaults__) Object.defineProperties(Campaign.prototype.downloadR20Resource, {
+            __defaults__ : {value: {try_files:ρσ_list_decorate([ "original", "max", "med", "thumb" ])}},
+            __handles_kwarg_interpolation__ : {value: true},
+            __argnames__ : {value: ["folder", "prefix", "url", "finallyCB", "try_files"]}
+        });
+        Campaign.prototype._makeNameUnique = function _makeNameUnique(names, orig_name) {
+            var self = this;
+            var name;
+            name = str(names.length).padStart(3, "0") + " - " + orig_name;
+            names.append(name);
+            return name;
+        };
+        if (!Campaign.prototype._makeNameUnique.__argnames__) Object.defineProperties(Campaign.prototype._makeNameUnique, {
+            __argnames__ : {value: ["names", "orig_name"]}
+        });
+        Campaign.prototype._flattenJournalEntries = function _flattenJournalEntries() {
+            var self = this;
+            var journal = ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true) ? undefined : arguments[0];
+            var _list = (arguments[1] === undefined || ( 1 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? _flattenJournalEntries.__defaults__._list : arguments[1];
+            var ρσ_kwargs_obj = arguments[arguments.length-1];
+            if (ρσ_kwargs_obj === null || typeof ρσ_kwargs_obj !== "object" || ρσ_kwargs_obj [ρσ_kwargs_symbol] !== true) ρσ_kwargs_obj = {};
+            if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "_list")){
+                _list = ρσ_kwargs_obj._list;
+            }
+            var entry;
+            var ρσ_Iter5 = ρσ_Iterable(journal);
+            for (var ρσ_Index5 = 0; ρσ_Index5 < ρσ_Iter5.length; ρσ_Index5++) {
+                entry = ρσ_Iter5[ρσ_Index5];
+                if ((typeof entry === "string" || typeof typeof entry === "object" && ρσ_equals(typeof entry, "string"))) {
+                    _list.append(entry);
+                } else {
+                    self._flattenJournalEntries(entry.i, _list);
+                }
+            }
+            return _list;
+        };
+        if (!Campaign.prototype._flattenJournalEntries.__defaults__) Object.defineProperties(Campaign.prototype._flattenJournalEntries, {
+            __defaults__ : {value: {_list:ρσ_list_decorate([])}},
+            __handles_kwarg_interpolation__ : {value: true},
+            __argnames__ : {value: ["journal", "_list"]}
+        });
+        Campaign.prototype._makeAddBlobToZip = function _makeAddBlobToZip(folder, filename, finallyCB) {
+            var self = this;
+            return (function() {
                 var ρσ_anonfunc = function (blob) {
-                    saveAs(blob, (filename) ? filename : self.title + ".zip");
+                    folder.file(filename, blob);
+                    finallyCB();
                 };
                 if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
                     __argnames__ : {value: ["blob"]}
                 });
                 return ρσ_anonfunc;
             })();
-            checkZipDone = function () {
-                if (!self.hasPendingOperation()) {
-                    zip.generateAsync((function(){
-                        var ρσ_d = {};
-                        ρσ_d["type"] = "blob";
-                        return ρσ_d;
-                    }).call(this), (function() {
-                        var ρσ_anonfunc = function (metadata) {
-                            console.log("progression: " + metadata.percent + " %");
-                        };
-                        if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
-                            __argnames__ : {value: ["metadata"]}
-                        });
-                        return ρσ_anonfunc;
-                    })()).then(saveZip).catch((function() {
-                        var ρσ_anonfunc = function (error) {
-                            console.log("Error generating zip : ", error);
-                        };
-                        if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
-                            __argnames__ : {value: ["error"]}
-                        });
-                        return ρσ_anonfunc;
-                    })());
+        };
+        if (!Campaign.prototype._makeAddBlobToZip.__argnames__) Object.defineProperties(Campaign.prototype._makeAddBlobToZip, {
+            __argnames__ : {value: ["folder", "filename", "finallyCB"]}
+        });
+        Campaign.prototype._addCharacterToZip = function _addCharacterToZip(folder, character, finallyCB) {
+            var self = this;
+            folder.file("character.json", toBlob(character));
+            if ((ρσ_exists.e(character.avatar, "") !== "" && (typeof ρσ_exists.e(character.avatar, "") !== "object" || ρσ_not_equals(ρσ_exists.e(character.avatar, ""), "")))) {
+                self.downloadR20Resource(folder, "avatar", character.avatar, finallyCB);
+            }
+            if (ρσ_exists.n(character.defaulttoken) && (ρσ_exists.e(character.defaulttoken.imgsrc, "") !== "" && (typeof ρσ_exists.e(character.defaulttoken.imgsrc, "") !== "object" || ρσ_not_equals(ρσ_exists.e(character.defaulttoken.imgsrc, ""), "")))) {
+                self.downloadR20Resource(folder, "token", character.defaulttoken.imgsrc, finallyCB);
+            }
+            if ((ρσ_exists.e(character.bio, "") !== "" && (typeof ρσ_exists.e(character.bio, "") !== "object" || ρσ_not_equals(ρσ_exists.e(character.bio, ""), "")))) {
+                folder.file("bio.html", new Blob(ρσ_list_decorate([ character.bio ])));
+            }
+            if ((ρσ_exists.e(character.gmnotes, "") !== "" && (typeof ρσ_exists.e(character.gmnotes, "") !== "object" || ρσ_not_equals(ρσ_exists.e(character.gmnotes, ""), "")))) {
+                folder.file("gmnotes.html", new Blob(ρσ_list_decorate([ character.gmnotes ])));
+            }
+        };
+        if (!Campaign.prototype._addCharacterToZip.__argnames__) Object.defineProperties(Campaign.prototype._addCharacterToZip, {
+            __argnames__ : {value: ["folder", "character", "finallyCB"]}
+        });
+        Campaign.prototype._addHandoutToZip = function _addHandoutToZip(folder, handout, finallyCB) {
+            var self = this;
+            folder.file("handout.json", toBlob(handout));
+            if ((ρσ_exists.e(handout.avatar, "") !== "" && (typeof ρσ_exists.e(handout.avatar, "") !== "object" || ρσ_not_equals(ρσ_exists.e(handout.avatar, ""), "")))) {
+                self.downloadR20Resource(folder, "avatar", handout.avatar, finallyCB);
+            }
+            if ((ρσ_exists.e(handout.notes, "") !== "" && (typeof ρσ_exists.e(handout.notes, "") !== "object" || ρσ_not_equals(ρσ_exists.e(handout.notes, ""), "")))) {
+                folder.file("notes.html", new Blob(ρσ_list_decorate([ handout.notes ])));
+            }
+            if ((ρσ_exists.e(handout.gmnotes, "") !== "" && (typeof ρσ_exists.e(handout.gmnotes, "") !== "object" || ρσ_not_equals(ρσ_exists.e(handout.gmnotes, ""), "")))) {
+                folder.file("gmnotes.html", new Blob(ρσ_list_decorate([ handout.gmnotes ])));
+            }
+        };
+        if (!Campaign.prototype._addHandoutToZip.__argnames__) Object.defineProperties(Campaign.prototype._addHandoutToZip, {
+            __argnames__ : {value: ["folder", "handout", "finallyCB"]}
+        });
+        Campaign.prototype._addJournalToZip = function _addJournalToZip(folder, journal, finallyCB) {
+            var self = this;
+            var names, handout, name, handout_dir, character, char_dir, child_dir, journal_entry;
+            names = ρσ_list_decorate([]);
+            var ρσ_Iter6 = ρσ_Iterable(journal);
+            for (var ρσ_Index6 = 0; ρσ_Index6 < ρσ_Iter6.length; ρσ_Index6++) {
+                journal_entry = ρσ_Iter6[ρσ_Index6];
+                if ((typeof journal_entry === "string" || typeof typeof journal_entry === "object" && ρσ_equals(typeof journal_entry, "string"))) {
+                    handout = self.findID(journal_entry, "handout");
+                    if (handout !== null) {
+                        name = self._makeNameUnique(names, handout.name);
+                        handout_dir = folder.folder(name);
+                        self._addHandoutToZip(handout_dir, handout, finallyCB);
+                    } else {
+                        character = self.findID(journal_entry, "character");
+                        if (character !== null) {
+                            name = self._makeNameUnique(names, character.name);
+                            char_dir = folder.folder(name);
+                            self._addCharacterToZip(char_dir, character, finallyCB);
+                        } else {
+                            console.log("Can't find handout with ID : ", journal_entry);
+                            continue;
+                        }
+                    }
+                } else {
+                    name = self._makeNameUnique(names, journal_entry.n);
+                    child_dir = folder.folder(name);
+                    self._addJournalToZip(child_dir, journal_entry.i, finallyCB);
                 }
-            };
-            makeAddBlobToZip = (function() {
-                var ρσ_anonfunc = function (folder, filename) {
-                    return (function() {
-                        var ρσ_anonfunc = function (blob) {
-                            console.log("Got blob for ", filename, " : ", blob);
-                            folder.file(filename, blob);
-                            checkZipDone();
-                        };
-                        if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
-                            __argnames__ : {value: ["blob"]}
-                        });
-                        return ρσ_anonfunc;
-                    })();
+            }
+        };
+        if (!Campaign.prototype._addJournalToZip.__argnames__) Object.defineProperties(Campaign.prototype._addJournalToZip, {
+            __argnames__ : {value: ["folder", "journal", "finallyCB"]}
+        });
+        Campaign.prototype._addPageToZip = function _addPageToZip(folder, page, finallyCB) {
+            var self = this;
+            var graphics, graphic;
+            folder.file("page.json", toBlob(page));
+            if ((ρσ_exists.e(page.thumbnail, "") !== "" && (typeof ρσ_exists.e(page.thumbnail, "") !== "object" || ρσ_not_equals(ρσ_exists.e(page.thumbnail, ""), "")))) {
+                self.downloadR20Resource(folder, "thumbnail", page.thumbnail, finallyCB);
+            }
+            if (page.graphics.length > 0) {
+                graphics = folder.folder("graphics");
+                var ρσ_Iter7 = ρσ_Iterable(page.graphics);
+                for (var ρσ_Index7 = 0; ρσ_Index7 < ρσ_Iter7.length; ρσ_Index7++) {
+                    graphic = ρσ_Iter7[ρσ_Index7];
+                    self.downloadR20Resource(graphics, graphic.id, graphic.imgsrc, finallyCB);
+                }
+            }
+        };
+        if (!Campaign.prototype._addPageToZip.__argnames__) Object.defineProperties(Campaign.prototype._addPageToZip, {
+            __argnames__ : {value: ["folder", "page", "finallyCB"]}
+        });
+        Campaign.prototype._saveZipToFile = function _saveZipToFile(zip, filename) {
+            var self = this;
+            var writeStream;
+            writeStream = streamSaver.createWriteStream(filename).getWriter();
+            zip.generateInternalStream((function(){
+                var ρσ_d = {};
+                ρσ_d["type"] = "uint8array";
+                ρσ_d["streamFiles"] = true;
+                return ρσ_d;
+            }).call(this)).on("data", (function() {
+                var ρσ_anonfunc = function (data) {
+                    writeStream.write(data);
                 };
                 if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
-                    __argnames__ : {value: ["folder", "filename"]}
+                    __argnames__ : {value: ["data"]}
+                });
+                return ρσ_anonfunc;
+            })()).on("error", (function() {
+                var ρσ_anonfunc = function (error) {
+                    console.error("Error generating zip: ", error);
+                };
+                if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                    __argnames__ : {value: ["error"]}
+                });
+                return ρσ_anonfunc;
+            })()).on("end", function () {
+                writeStream.close();
+            }).resume();
+        };
+        if (!Campaign.prototype._saveZipToFile.__argnames__) Object.defineProperties(Campaign.prototype._saveZipToFile, {
+            __argnames__ : {value: ["zip", "filename"]}
+        });
+        Campaign.prototype._saveCampaignZipCharacters = function _saveCampaignZipCharacters(checkZipDone) {
+            var self = this;
+            var characters, names, name, char_dir, character;
+            console.log("Saving Characters");
+            if (self.campaign.characters.length > 0) {
+                characters = self.zip.folder("characters");
+                names = ρσ_list_decorate([]);
+                var ρσ_Iter8 = ρσ_Iterable(self.campaign.characters);
+                for (var ρσ_Index8 = 0; ρσ_Index8 < ρσ_Iter8.length; ρσ_Index8++) {
+                    character = ρσ_Iter8[ρσ_Index8];
+                    name = self._makeNameUnique(names, character.name);
+                    char_dir = characters.folder(name);
+                    self._addCharacterToZip(char_dir, character, checkZipDone);
+                }
+            }
+            self.savingStep = 1;
+            checkZipDone();
+        };
+        if (!Campaign.prototype._saveCampaignZipCharacters.__argnames__) Object.defineProperties(Campaign.prototype._saveCampaignZipCharacters, {
+            __argnames__ : {value: ["checkZipDone"]}
+        });
+        Campaign.prototype._saveCampaignZipJournal = function _saveCampaignZipJournal(checkZipDone) {
+            var self = this;
+            var journal, all_ids, orphaned, archived, handout, folder;
+            console.log("Saving Journal");
+            if (self.campaign.journalfolder.length > 0) {
+                journal = self.zip.folder("journal");
+                self._addJournalToZip(journal, self.campaign.journalfolder, checkZipDone);
+                all_ids = self._flattenJournalEntries(self.campaign.journalfolder);
+                orphaned = ρσ_list_decorate([]);
+                archived = ρσ_list_decorate([]);
+                var ρσ_Iter9 = ρσ_Iterable(self.campaign.handouts);
+                for (var ρσ_Index9 = 0; ρσ_Index9 < ρσ_Iter9.length; ρσ_Index9++) {
+                    handout = ρσ_Iter9[ρσ_Index9];
+                    if (!ρσ_in(handout.id, all_ids)) {
+                        orphaned.append(handout.id);
+                    } else if (handout.archived) {
+                        archived.append(handout.id);
+                    }
+                }
+                if (archived.length > 0) {
+                    folder = journal.folder("Archived Handouts");
+                    self._addJournalToZip(folder, archived, checkZipDone);
+                }
+                if (orphaned.length > 0) {
+                    folder = journal.folder("Orphaned Handouts");
+                    self._addJournalToZip(folder, orphaned, checkZipDone);
+                }
+            }
+            self.savingStep = 2;
+            checkZipDone();
+        };
+        if (!Campaign.prototype._saveCampaignZipJournal.__argnames__) Object.defineProperties(Campaign.prototype._saveCampaignZipJournal, {
+            __argnames__ : {value: ["checkZipDone"]}
+        });
+        Campaign.prototype._saveCampaignZipPage = function _saveCampaignZipPage(checkZipDone) {
+            var self = this;
+            var page, name, page_dir;
+            console.log("Saving Page Index : ", self.savingPageIdx);
+            if (self.savingPageIdx >= self.campaign.pages.length) {
+                self.savingStep = 4;
+            } else {
+                page = (ρσ_expr_temp = self.campaign.pages)[ρσ_bound_index(self.savingPageIdx, ρσ_expr_temp)];
+                self.savingPageIdx += 1;
+                name = (len(page.name) > 0) ? page.name : "Untitled Page";
+                name = self._makeNameUnique(self.names, name);
+                page_dir = self.pages.folder(name);
+                self._addPageToZip(page_dir, page, checkZipDone);
+            }
+            checkZipDone();
+        };
+        if (!Campaign.prototype._saveCampaignZipPage.__argnames__) Object.defineProperties(Campaign.prototype._saveCampaignZipPage, {
+            __argnames__ : {value: ["checkZipDone"]}
+        });
+        Campaign.prototype._saveCampaignZipPages = function _saveCampaignZipPages(checkZipDone) {
+            var self = this;
+            console.log("Saving Pages");
+            if (self.campaign.pages.length > 0) {
+                self.pages = self.zip.folder("pages");
+                self.names = ρσ_list_decorate([]);
+            }
+            self.savingStep = 3;
+            self.savingPageIdx = 0;
+            checkZipDone();
+        };
+        if (!Campaign.prototype._saveCampaignZipPages.__argnames__) Object.defineProperties(Campaign.prototype._saveCampaignZipPages, {
+            __argnames__ : {value: ["checkZipDone"]}
+        });
+        Campaign.prototype.saveCampaignZip = function saveCampaignZip() {
+            var self = this;
+            var filename = (arguments[0] === undefined || ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? saveCampaignZip.__defaults__.filename : arguments[0];
+            var ρσ_kwargs_obj = arguments[arguments.length-1];
+            if (ρσ_kwargs_obj === null || typeof ρσ_kwargs_obj !== "object" || ρσ_kwargs_obj [ρσ_kwargs_symbol] !== true) ρσ_kwargs_obj = {};
+            if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "filename")){
+                filename = ρσ_kwargs_obj.filename;
+            }
+            var zip, saveZip, checkZipDone;
+            if (self.zip !== null) {
+                console.error("Saving already in progress. Can't be cancelled.");
+                return;
+            }
+            filename = (filename) ? filename : self.title + ".zip";
+            zip = new JSZip;
+            zip.file("campaign.json", toJSON(self.campaign));
+            self.zip = zip;
+            saveZip = (function() {
+                var ρσ_anonfunc = function (blob) {
+                    saveAs(blob, filename);
+                };
+                if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                    __argnames__ : {value: ["blob"]}
                 });
                 return ρσ_anonfunc;
             })();
-            if (campaign.characters.length > 0) {
-                characters = zip.folder("characters");
-                names = ρσ_list_decorate([]);
-                var ρσ_Iter4 = ρσ_Iterable(campaign.characters);
-                for (var ρσ_Index4 = 0; ρσ_Index4 < ρσ_Iter4.length; ρσ_Index4++) {
-                    char = ρσ_Iter4[ρσ_Index4];
-                    name = char.name;
-                    idx = 1;
-                    while (ρσ_in(name, names)) {
-                        name = char.name + "(" + idx + ")";
-                        idx += 1;
-                    }
-                    names.append(name);
-                    char_dir = characters.folder(name);
-                    char_dir.file("character.json", toBlob(char));
-                    if ((ρσ_exists.e(char.avatar, "") !== "" && (typeof ρσ_exists.e(char.avatar, "") !== "object" || ρσ_not_equals(ρσ_exists.e(char.avatar, ""), "")))) {
-                        self.downloadResource(char.avatar, makeAddBlobToZip(char_dir, "avatar.png"), checkZipDone);
-                    }
-                    if (ρσ_exists.n(char.defaulttoken) && (ρσ_exists.e(char.defaulttoken.imgsrc, "") !== "" && (typeof ρσ_exists.e(char.defaulttoken.imgsrc, "") !== "object" || ρσ_not_equals(ρσ_exists.e(char.defaulttoken.imgsrc, ""), "")))) {
-                        self.downloadResource(char.defaulttoken.imgsrc, makeAddBlobToZip(char_dir, "token.png"), checkZipDone);
-                    }
-                    if ((ρσ_exists.e(char.bio, "") !== "" && (typeof ρσ_exists.e(char.bio, "") !== "object" || ρσ_not_equals(ρσ_exists.e(char.bio, ""), "")))) {
-                        char_dir.file("bio.html", new Blob(ρσ_list_decorate([ char.bio ])));
-                    }
-                    if ((ρσ_exists.e(char.gmnotes, "") !== "" && (typeof ρσ_exists.e(char.gmnotes, "") !== "object" || ρσ_not_equals(ρσ_exists.e(char.gmnotes, ""), "")))) {
-                        char_dir.file("gmnotes.html", new Blob(ρσ_list_decorate([ char.gmnotes ])));
+            self.savingStep = 0;
+            checkZipDone = function () {
+                if (!self.hasPendingOperation()) {
+                    console.log("No more pending operations. Current step is ", self.savingStep);
+                    if ((self.savingStep === 0 || typeof self.savingStep === "object" && ρσ_equals(self.savingStep, 0))) {
+                        self._saveCampaignZipCharacters(checkZipDone);
+                    } else if ((self.savingStep === 1 || typeof self.savingStep === "object" && ρσ_equals(self.savingStep, 1))) {
+                        self._saveCampaignZipJournal(checkZipDone);
+                    } else if ((self.savingStep === 2 || typeof self.savingStep === "object" && ρσ_equals(self.savingStep, 2))) {
+                        self._saveCampaignZipPages(checkZipDone);
+                    } else if ((self.savingStep === 3 || typeof self.savingStep === "object" && ρσ_equals(self.savingStep, 3))) {
+                        self._saveCampaignZipPage(checkZipDone);
+                    } else {
+                        self._saveZipToFile(zip, filename);
+                        self.zip = null;
                     }
                 }
-            }
+            };
             checkZipDone();
         };
         if (!Campaign.prototype.saveCampaignZip.__defaults__) Object.defineProperties(Campaign.prototype.saveCampaignZip, {
             __defaults__ : {value: {filename:null}},
             __handles_kwarg_interpolation__ : {value: true},
-            __argnames__ : {value: ["campaign", "filename"]}
+            __argnames__ : {value: ["filename"]}
         });
         Campaign.prototype.exportCampaignZip = function exportCampaignZip() {
             var self = this;
@@ -4508,7 +5159,7 @@ var str = ρσ_str, repr = ρσ_repr;;
             var save;
             save = (function() {
                 var ρσ_anonfunc = function (campaign) {
-                    self.saveCampaignZip(campaign, filename);
+                    self.saveCampaignZip(filename);
                 };
                 if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
                     __argnames__ : {value: ["campaign"]}

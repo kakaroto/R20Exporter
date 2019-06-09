@@ -9,6 +9,7 @@ class Campaign:
     def __init__(self, title):
         self.title = title
         self.campaign = []
+        self.zip = None
         self._pending_operations = []
 
     def newPendingOperation(self):
@@ -20,9 +21,29 @@ class Campaign:
         return self._pending_operations.length > 0
 
     def completedOperation(self, id):
-        self._pending_operations.remove(id)
+        try:
+            self._pending_operations.remove(id)
+        except:
+            pass
         console.log("Completed Operation ", id, " we have ", self._pending_operations.length, " remaining operations")
         return not self.hasPendingOperation()
+
+    def findID(self, id, obj_type=None):
+        find_id = def (o):
+            return o.id == id
+        if obj_type == "handout" or obj_type is None:
+            handout = self.campaign.handouts.find(find_id)
+            if handout?:
+                return handout
+        if obj_type == "page" or obj_type is None:
+            page = self.campaign.pages.find(find_id)
+            if page?:
+                return page
+        if obj_type == "character" or obj_type is None:
+            char = self.campaign.characters.find(find_id)
+            if char?:
+                return char
+        return None
 
     def parsePage(self, page):
         data = page.toJSON()
@@ -37,7 +58,17 @@ class Campaign:
     def parsePages(self, pages):
         array = []
         for page in pages.models:
-            array.append(self.parsePage(page))
+            if page.fullyLoaded:
+                array.append(self.parsePage(page))
+            else:
+                # Archived pages are not loaded. We can tell them to load but we have
+                # no callbacks on when that is done, so we need to wait before parsing them.
+                id = self.newPendingOperation()
+                makeCB = def(a, i, p):
+                    a.append(self.parsePage(p))
+                    self.completedOperation(i)
+                page.fullyLoadPage()
+                setTimeout(makeCB(array, id, page), 1000)
         console.log("Finished parsing pages.")
         return array
 
@@ -107,8 +138,14 @@ class Campaign:
         console.log("Finished parsing handouts.")
         return array
 
+    def loadArchivedPages(self):
+        for page in window.Campaign.pages.models:
+            if not page.fullyLoaded:
+                page.fullyLoadPage()
+
     def parseCampaign(self, cb):
         result = window.Campaign.toJSON()
+        result.campaign_title = self.title
         self.campaign = result
         done = def():
             if cb:
@@ -118,80 +155,239 @@ class Campaign:
         result.handouts = self.parseHandouts(window.Campaign.handouts, done)
         result.characters = self.parseCharacters(window.Campaign.characters, done)
         result.pages = self.parsePages(window.Campaign.pages)
-        result.journalfolder = JSON.parse(result.journalfolder)
-        result.turnorder = JSON.parse(result.turnorder)
+        if result.jukeboxfolder != "":
+            result.jukeboxfolder = JSON.parse(result.jukeboxfolder)
+        if result.journalfolder != "":
+            result.journalfolder = JSON.parse(result.journalfolder)
+        if result.turnorder != "":
+            result.turnorder = JSON.parse(result.turnorder)
         if self.completedOperation(id):
             done()
         return result
 
-    def saveCampaign(self, campaign, filename=None):
-        saveAs(toBlob(campaign), filename if filename else (self.title + ".json"))
+    def saveCampaign(self, filename=None):
+        saveAs(toBlob(self.campaign), filename if filename else (self.title + ".json"))
 
     def exportCampaignJson(self, filename=None):
         save = def():
-            self.saveCampaign(campaign, filename)
+            self.saveCampaign(filename)
         self.campaign = self.parseCampaign(save)
 
     def exportCampaign(self):
         self.exportCampaignJson()
 
-    def downloadResource(self, url, cb, finallyCB=None):
+    def downloadResource(self, url, cb, errorCB=None):
         id = self.newPendingOperation()
-        fetch(url).then(def(response):
+        
+        promise = fetch(url).then(def(response):
             if response.status == 200 or response.status == 0:
                 return Promise.resolve(response.blob());
             else:
                 return Promise.reject(new Error(response.statusText));
-        ).then(cb).finally(def(error):
-                self.completedOperation(id)
-                if finallyCB:
-                    finallyCB()
+        ).then(def (blob):
+            self.completedOperation(id)
+            if cb:
+                cb(blob)
+        ).catch(def (error):
+            console.log("Error downloading ", url, " : ", error)
+            self.completedOperation(id)
+            if errorCB:
+                errorCB()
         )
 
-    def saveCampaignZip(self, campaign, filename=None):
+    # Most avatar/imgsrc URLs use the 'med' filename, even for the huge map files. We should download the appropriate sized
+    # file depending on the image size we are looking for. We just download the highest resolution file that we can instead.
+    def downloadR20Resource(self, folder, prefix, url, finallyCB, try_files=["original", "max", "med", "thumb"]):
+        filename = url.split("/")[-1].split(".")[0]
+
+        # This is needed so we download the higher res file first.
+        # Unfortunately, there are some CORS issues sometimes, so if higher res file fails, download the lower one.
+        if try_files.length > 0:
+            if filename in ["original", "max", "med", "thumb"]:
+                new_url = url.replace("/" + filename + ".", "/" + try_files[0] + ".")
+            else:
+                new_url = url
+                try_files = [""]
+
+            errorCB = def():
+                self.downloadR20Resource(folder, prefix, url, finallyCB, try_files[1:])
+            self.downloadResource(new_url, self._makeAddBlobToZip(folder, prefix + ".png", finallyCB), errorCB)
+        else:
+            console.log("Couldn't download ", url, " with any filename. Abandoning")
+            finallyCB()
+            
+
+    def _makeNameUnique(self, names, orig_name):
+        name = str(names.length).padStart(3, "0") + " - " + orig_name
+        names.append(name)
+        return name
+
+    def _flattenJournalEntries(self, journal, _list=[]):
+        for entry in journal:
+            if jstype(entry) == "string":
+                _list.append(entry)
+            else:
+                self._flattenJournalEntries(entry.i, _list)
+        return _list
+
+    def _makeAddBlobToZip(self, folder, filename, finallyCB):
+        return def(blob):
+            folder.file(filename, blob)
+            finallyCB()
+
+    def _addCharacterToZip(self, folder, character, finallyCB):
+        folder.file("character.json", toBlob(character))
+        if (character.avatar? "") != "":
+            self.downloadR20Resource(folder, "avatar", character.avatar, finallyCB)
+        if character.defaulttoken? and (character.defaulttoken.imgsrc? "") != "":
+            self.downloadR20Resource(folder, "token", character.defaulttoken.imgsrc, finallyCB)
+        if (character.bio? "") != "":
+            folder.file("bio.html", new Blob([character.bio]))
+        if (character.gmnotes? "") != "":
+            folder.file("gmnotes.html", new Blob([character.gmnotes]))
+
+    def _addHandoutToZip(self, folder, handout, finallyCB):
+        folder.file("handout.json", toBlob(handout))
+        if (handout.avatar? "") != "":
+            self.downloadR20Resource(folder, "avatar", handout.avatar, finallyCB)
+        if (handout.notes? "") != "":
+            folder.file("notes.html", new Blob([handout.notes]))
+        if (handout.gmnotes? "") != "":
+            folder.file("gmnotes.html", new Blob([handout.gmnotes]))
+
+    def _addJournalToZip(self, folder, journal, finallyCB):
+        names = []
+        for journal_entry in journal:
+            if jstype(journal_entry) == "string":
+                handout = self.findID(journal_entry, "handout")
+                if handout is not None:
+                    name = self._makeNameUnique(names, handout.name)
+                    handout_dir = folder.folder(name)
+                    self._addHandoutToZip(handout_dir, handout, finallyCB)
+                else:
+                    character = self.findID(journal_entry, "character")
+                    if character is not None:
+                        name = self._makeNameUnique(names, character.name)
+                        char_dir = folder.folder(name)
+                        self._addCharacterToZip(char_dir, character, finallyCB)
+                    else:
+                        console.log("Can't find handout with ID : ", journal_entry)
+                        continue
+            else:
+                name = self._makeNameUnique(names, journal_entry.n)
+                child_dir = folder.folder(name)
+                self._addJournalToZip(child_dir, journal_entry.i, finallyCB)
+
+    def _addPageToZip(self, folder, page, finallyCB):
+        folder.file("page.json", toBlob(page))
+        if (page.thumbnail? "") != "":
+            self.downloadR20Resource(folder, "thumbnail", page.thumbnail, finallyCB)
+        if page.graphics.length > 0:
+            graphics = folder.folder("graphics")
+            for graphic in page.graphics:
+                self.downloadR20Resource(graphics, graphic.id, graphic.imgsrc, finallyCB)
+
+    def _saveZipToFile(self, zip, filename):
+        writeStream = streamSaver.createWriteStream(filename).getWriter()
+        zip.generateInternalStream({"type": "uint8array", "streamFiles": True}) \
+            .on('data', def(data):
+                    writeStream.write(data)
+                ).on('error', def(error):
+                         console.error("Error generating zip: ", error)
+                     ).on('end', def():
+                              writeStream.close()
+                          ).resume()
+
+    def _saveCampaignZipCharacters(self, checkZipDone):
+        console.log("Saving Characters")
+        if self.campaign.characters.length > 0:
+            characters = self.zip.folder("characters")
+            names = []
+            for character in self.campaign.characters:
+                name = self._makeNameUnique(names, character.name)
+                char_dir = characters.folder(name)
+                self._addCharacterToZip(char_dir, character, checkZipDone)
+
+        self.savingStep = 1
+        checkZipDone()
+
+    def _saveCampaignZipJournal(self, checkZipDone):
+        console.log("Saving Journal")
+        if self.campaign.journalfolder.length > 0:
+            journal = self.zip.folder("journal")
+            self._addJournalToZip(journal, self.campaign.journalfolder, checkZipDone)
+            all_ids = self._flattenJournalEntries(self.campaign.journalfolder)
+            orphaned = []
+            archived = []
+            for handout in self.campaign.handouts:
+                if handout.id not in all_ids:
+                    orphaned.append(handout.id)
+                elif handout.archived:
+                    archived.append(handout.id)
+            if archived.length > 0:
+                folder = journal.folder("Archived Handouts")
+                self._addJournalToZip(folder, archived, checkZipDone)
+            if orphaned.length > 0:
+                folder = journal.folder("Orphaned Handouts")
+                self._addJournalToZip(folder, orphaned, checkZipDone)
+
+        self.savingStep = 2
+        checkZipDone()
+
+    def _saveCampaignZipPage(self, checkZipDone):
+        console.log("Saving Page Index : ", self.savingPageIdx)
+        if self.savingPageIdx >= self.campaign.pages.length:
+            self.savingStep = 4
+        else:
+            page = self.campaign.pages[self.savingPageIdx]
+            self.savingPageIdx += 1
+            name = page.name if len(page.name) > 0  else "Untitled Page"
+            name = self._makeNameUnique(self.names, name)
+            page_dir = self.pages.folder(name)
+            self._addPageToZip(page_dir, page, checkZipDone)
+
+        checkZipDone()
+
+    def _saveCampaignZipPages(self, checkZipDone):
+        console.log("Saving Pages")
+        if self.campaign.pages.length > 0:
+            self.pages = self.zip.folder("pages")
+            self.names = []
+        self.savingStep = 3
+        self.savingPageIdx = 0
+        checkZipDone()
+
+    def saveCampaignZip(self, filename=None):
+        if self.zip is not None:
+            console.error("Saving already in progress. Can't be cancelled.")
+            return
+        filename = filename if filename else (self.title + ".zip")
         zip = new JSZip()
-        zip.file('campaign.json', toJSON(campaign))
+        zip.file('campaign.json', toJSON(self.campaign))
         self.zip = zip
         saveZip = def(blob):
-            saveAs(blob, filename if filename else (self.title + ".zip"))
+            saveAs(blob, filename)
+        self.savingStep = 0
         checkZipDone = def():
             if not self.hasPendingOperation():
-                zip.generateAsync({"type":"blob"}, def (metadata):
-                                      console.log("progression: " + metadata.percent + " %")
-                                  ).then(saveZip).catch(def (error):
-                                                            console.log("Error generating zip : ", error)
-                                                        )
-        makeAddBlobToZip = def(folder, filename):
-            return def(blob):
-                console.log("Got blob for ", filename, " : ", blob)
-                folder.file(filename, blob)
-                checkZipDone()
-                                          
-        if campaign.characters.length > 0:
-            characters = zip.folder("characters")
-            names = []
-            for char in campaign.characters:
-                name = char.name
-                idx = 1
-                while name in names:
-                    name = char.name + "(" + idx + ")"
-                    idx += 1
-                names.append(name)
-                char_dir = characters.folder(name)
-                char_dir.file("character.json", toBlob(char))
-                if (char.avatar? "") != "":
-                    self.downloadResource(char.avatar, makeAddBlobToZip(char_dir, "avatar.png"), checkZipDone)
-                if char.defaulttoken? and (char.defaulttoken.imgsrc? "") != "":
-                    self.downloadResource(char.defaulttoken.imgsrc, makeAddBlobToZip(char_dir, "token.png"), checkZipDone)
-                if (char.bio? "") != "":
-                    char_dir.file("bio.html", new Blob([char.bio]))
-                if (char.gmnotes? "") != "":
-                    char_dir.file("gmnotes.html", new Blob([char.gmnotes]))
+                console.log("No more pending operations. Current step is ", self.savingStep)
+                if self.savingStep == 0:
+                    self._saveCampaignZipCharacters(checkZipDone)
+                elif self.savingStep == 1:
+                    self._saveCampaignZipJournal(checkZipDone)
+                elif self.savingStep == 2:
+                    self._saveCampaignZipPages(checkZipDone)
+                elif self.savingStep == 3:
+                    self._saveCampaignZipPage(checkZipDone)
+                else:
+                    self._saveZipToFile(zip, filename)
+                    self.zip = None
+
         checkZipDone()
 
     def exportCampaignZip(self, filename=None):
         save = def(campaign):
-            self.saveCampaignZip(campaign, filename)
+            self.saveCampaignZip(filename)
         self.campaign = self.parseCampaign(save)
 
 console.log("Roll20 Campaign exporter loaded")
