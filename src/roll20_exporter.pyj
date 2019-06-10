@@ -65,8 +65,9 @@ class Campaign:
                 # no callbacks on when that is done, so we need to wait before parsing them.
                 id = self.newPendingOperation()
                 makeCB = def(a, i, p):
-                    a.append(self.parsePage(p))
-                    self.completedOperation(i)
+                    return def():
+                        a.append(self.parsePage(p))
+                        self.completedOperation(i)
                 page.fullyLoadPage()
                 setTimeout(makeCB(array, id, page), 1000)
         console.log("Finished parsing pages.")
@@ -86,6 +87,8 @@ class Campaign:
     
     def parseCharacter(self, character, cb):
         data = character.toJSON()
+        data.inplayerjournals = data.inplayerjournals.split(",")
+        data.controlledby = data.controlledby.split(",")
         if data.bio != "":
             del data.bio
             bio_id = self.newPendingOperation()
@@ -117,6 +120,8 @@ class Campaign:
 
     def parseHandout(self, handout, cb):
         data = handout.toJSON()
+        data.inplayerjournals = data.inplayerjournals.split(",")
+        data.controlledby = data.controlledby.split(",")
         if data.notes != "":
             del data.notes
             notes_id = self.newPendingOperation()
@@ -138,15 +143,34 @@ class Campaign:
         console.log("Finished parsing handouts.")
         return array
 
+    def parsePlayer(self, player):
+        data = player.toJSON()
+        if data.journalfolderstatus:
+            data.journalfolderstatus = data.journalfolderstatus.split(",")
+        if data.jukeboxfolderstatus:
+            data.jukebosfolderstatus = data.jukeboxfolderstatus.split(",")
+        if data.macrobar:
+            data.macrobar = data.macrobar.split(",")
+        if data.adv_fow_revealed:
+            data.adv_fow_revealed = JSON.parse(data.adv_fow_revealed)
+        return data
+
+    def parsePlayers(self, players):
+        array = []
+        for player in players.models:
+            array.append(self.parsePlayer(player))
+        console.log("Finished parsing players.")
+        return array
+
     def loadArchivedPages(self):
+        num_loaded = 0
         for page in window.Campaign.pages.models:
             if not page.fullyLoaded:
                 page.fullyLoadPage()
+                num_loaded += 1
+        return num_loaded
 
-    def parseCampaign(self, cb):
-        result = window.Campaign.toJSON()
-        result.campaign_title = self.title
-        self.campaign = result
+    def _parseCampaignDelayed(self, result, cb):
         done = def():
             if cb:
                 cb(result)
@@ -155,6 +179,7 @@ class Campaign:
         result.handouts = self.parseHandouts(window.Campaign.handouts, done)
         result.characters = self.parseCharacters(window.Campaign.characters, done)
         result.pages = self.parsePages(window.Campaign.pages)
+        result.players = self.parsePlayers(window.Campaign.players)
         if result.jukeboxfolder != "":
             result.jukeboxfolder = JSON.parse(result.jukeboxfolder)
         if result.journalfolder != "":
@@ -163,6 +188,17 @@ class Campaign:
             result.turnorder = JSON.parse(result.turnorder)
         if self.completedOperation(id):
             done()
+
+    def parseCampaign(self, cb):
+        num_loaded = self.loadArchivedPages()
+        result = window.Campaign.toJSON()
+        result.campaign_title = self.title
+        self.campaign = result
+
+        delayed = def():
+            self._parseCampaignDelayed(result, cb)
+        console.log("Waiting ", num_loaded, " seconds for archived pages to finish loading")
+        setTimeout(delayed, num_loaded * 5000)
         return result
 
     def saveCampaign(self, filename=None):
@@ -171,7 +207,7 @@ class Campaign:
     def exportCampaignJson(self, filename=None):
         save = def():
             self.saveCampaign(filename)
-        self.campaign = self.parseCampaign(save)
+        self.parseCampaign(save)
 
     def exportCampaign(self):
         self.exportCampaignJson()
@@ -341,7 +377,7 @@ class Campaign:
         else:
             page = self.campaign.pages[self.savingPageIdx]
             self.savingPageIdx += 1
-            name = page.name if len(page.name) > 0  else "Untitled Page"
+            name = page.name if len(page.name) > 0  else "Untitled"
             name = self._makeNameUnique(self.names, name)
             page_dir = self.pages.folder(name)
             self._addPageToZip(page_dir, page, checkZipDone)
@@ -388,7 +424,7 @@ class Campaign:
     def exportCampaignZip(self, filename=None):
         save = def(campaign):
             self.saveCampaignZip(filename)
-        self.campaign = self.parseCampaign(save)
+        self.parseCampaign(save)
 
 console.log("Roll20 Campaign exporter loaded")
 window.R20Exporter = new Campaign($("head title").text().trim().replace(" | Roll20", ""))
