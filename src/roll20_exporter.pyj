@@ -8,7 +8,7 @@ def toBlob(obj):
 class Campaign:
     def __init__(self, title):
         self.title = title
-        self.campaign = []
+        self.campaign = {}
         self.zip = None
         self._pending_operations = []
 
@@ -43,6 +43,10 @@ class Campaign:
             char = self.campaign.characters.find(find_id)
             if char?:
                 return char
+        if obj_type == "track" or obj_type is None:
+            track = self.campaign.jukebox.find(find_id)
+            if track?:
+                return track
         return None
 
     def parsePage(self, page):
@@ -170,6 +174,37 @@ class Campaign:
                 num_loaded += 1
         return num_loaded
 
+    def _parseChatArchiveHTML(self, obj, html):
+        scripts = $(html).filter("script[type='text/javascript']")
+        prefix = "var msgdata = \""
+        for i in range(scripts.length):
+            content = scripts[i].textContent.trim()
+            if content.startsWith(prefix):
+                start = len(prefix)
+                end = content.indexOf("\";", start)
+                try:
+                    chat = atob(content[start:end])
+                    obj.chat_archive = JSON.parse(chat)
+                except Exception as e:
+                    console.log("Unable to parse chat data: ", e)
+                break
+                
+    def _fetchChatArchive(self, obj, done):
+        id = self.newPendingOperation()
+        errorcb = def():
+            if self.completedOperation(id) and done:
+                done()
+        cb = def(blob):
+            f = new FileReader()
+            f.onerror = errorcb
+            f.onabort = errorcb
+            f.onload = def():
+                self._parseChatArchiveHTML(obj, f.result)
+                if self.completedOperation(id) and done:
+                    done()
+            f.readAsText(blob)
+        self.downloadResource("https://app.roll20.net/campaigns/chatarchive/" + obj.campaign_id, cb, errorcb)
+
     def _parseCampaignDelayed(self, result, cb):
         done = def():
             if cb:
@@ -180,6 +215,8 @@ class Campaign:
         result.characters = self.parseCharacters(window.Campaign.characters, done)
         result.pages = self.parsePages(window.Campaign.pages)
         result.players = self.parsePlayers(window.Campaign.players)
+        result.jukebox = window.Jukebox.playlist.toJSON()
+        self._fetchChatArchive(result, done)
         if result.jukeboxfolder != "":
             result.jukeboxfolder = JSON.parse(result.jukeboxfolder)
         if result.journalfolder != "":
@@ -193,11 +230,12 @@ class Campaign:
         num_loaded = self.loadArchivedPages()
         result = window.Campaign.toJSON()
         result.campaign_title = self.title
+        result.campaign_id = window.campaign_id
         self.campaign = result
 
         delayed = def():
             self._parseCampaignDelayed(result, cb)
-        console.log("Waiting ", num_loaded, " seconds for archived pages to finish loading")
+        console.log("Waiting ", num_loaded * 5, " seconds for archived pages to finish loading")
         setTimeout(delayed, num_loaded * 5000)
         return result
 
@@ -314,6 +352,36 @@ class Campaign:
                 child_dir = folder.folder(name)
                 self._addJournalToZip(child_dir, journal_entry.i, finallyCB)
 
+    def _addPlaylistToZip(self, folder, playlist, finallyCB):
+        names = []
+        for audio in playlist:
+            if jstype(audio) == "string":
+                track = self.findID(audio, "track")
+                if track is not None:
+                    name = self._makeNameUnique(names, track.title)
+                    if name[-4] != ".mp3":
+                        name += ".mp3"
+                    if track.source == "My Audio":
+                        url = "https://app.roll20.net/audio_library/play/" + track.track_id
+                    elif track.source == "Tabletop Audio":
+                        url = "https://s3.amazonaws.com/cdn.roll20.net/ttaudio/" + track.track_id.split("-")[0]
+                    elif track.source == "Incompetech":
+                        url =  "https://s3.amazonaws.com/cdn.roll20.net/incompetech/" + track.track_id.split("-")[0]
+                    else:
+                        url = None
+                        print("Can't download Audio track. Unsupported source : %s" % track.source)
+                    if url:
+                        errorCB = def():
+                            console.log("Couldn't download Jukebox audio from url : ", url)
+                        self.downloadResource(url, self._makeAddBlobToZip(folder, name, finallyCB), errorCB)
+                else:
+                    console.log("Can't find Audio Track with ID : ", track)
+                    continue
+            else:
+                name = self._makeNameUnique(names, audio.n)
+                child_dir = folder.folder(name)
+                self._addPlaylistToZip(child_dir, audio.i, finallyCB)
+
     def _addPageToZip(self, folder, page, finallyCB):
         folder.file("page.json", toBlob(page))
         if (page.thumbnail? "") != "":
@@ -393,6 +461,15 @@ class Campaign:
         self.savingPageIdx = 0
         checkZipDone()
 
+    def _saveCampaignZipJukebox(self, checkZipDone):
+        console.log("Saving Jukebox audio")
+        if self.campaign.jukeboxfolder.length > 0:
+            jukebox = self.zip.folder("jukebox")
+            self._addPlaylistToZip(jukebox, self.campaign.jukeboxfolder, checkZipDone)
+        self.savingStep = 5
+        self.savingPageIdx = 0
+        checkZipDone()
+
     def saveCampaignZip(self, filename=None):
         if self.zip is not None:
             console.error("Saving already in progress. Can't be cancelled.")
@@ -415,6 +492,8 @@ class Campaign:
                     self._saveCampaignZipPages(checkZipDone)
                 elif self.savingStep == 3:
                     self._saveCampaignZipPage(checkZipDone)
+                elif self.savingStep == 4:
+                    self._saveCampaignZipJukebox(checkZipDone)
                 else:
                     self._saveZipToFile(zip, filename)
                     self.zip = None

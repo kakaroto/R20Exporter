@@ -4668,7 +4668,7 @@ var str = ρσ_str, repr = ρσ_repr;;
         Campaign.prototype.__init__ = function __init__(title) {
             var self = this;
             self.title = title;
-            self.campaign = ρσ_list_decorate([]);
+            self.campaign = {};
             self.zip = null;
             self._pending_operations = ρσ_list_decorate([]);
         };
@@ -4712,7 +4712,7 @@ var str = ρσ_str, repr = ρσ_repr;;
             if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "obj_type")){
                 obj_type = ρσ_kwargs_obj.obj_type;
             }
-            var find_id, handout, page, char;
+            var find_id, handout, page, char, track;
             find_id = (function() {
                 var ρσ_anonfunc = function (o) {
                     return (o.id === id || typeof o.id === "object" && ρσ_equals(o.id, id));
@@ -4738,6 +4738,12 @@ var str = ρσ_str, repr = ρσ_repr;;
                 char = self.campaign.characters.find(find_id);
                 if ((typeof char !== "undefined" && char !== null)) {
                     return char;
+                }
+            }
+            if ((obj_type === "track" || typeof obj_type === "object" && ρσ_equals(obj_type, "track")) || obj_type === null) {
+                track = self.campaign.jukebox.find(find_id);
+                if ((typeof track !== "undefined" && track !== null)) {
+                    return track;
                 }
             }
             return null;
@@ -4984,6 +4990,69 @@ var str = ρσ_str, repr = ρσ_repr;;
             }
             return num_loaded;
         };
+        Campaign.prototype._parseChatArchiveHTML = function _parseChatArchiveHTML(obj, html) {
+            var self = this;
+            var scripts, prefix, content, start, end, chat, i;
+            scripts = $(html).filter("script[type='text/javascript']");
+            prefix = "var msgdata = \"";
+            for (var ρσ_Index6 = 0; ρσ_Index6 < scripts.length; ρσ_Index6++) {
+                i = ρσ_Index6;
+                content = scripts[(typeof i === "number" && i < 0) ? scripts.length + i : i].textContent.trim();
+                if (content.startsWith(prefix)) {
+                    start = len(prefix);
+                    end = content.indexOf("\";", start);
+                    try {
+                        chat = atob(content.slice(start, end));
+                        obj.chat_archive = JSON.parse(chat);
+                    } catch (ρσ_Exception) {
+                        ρσ_last_exception = ρσ_Exception;
+                        if (ρσ_Exception instanceof Error) {
+                            var e = ρσ_Exception;
+                            console.log("Unable to parse chat data: ", e);
+                        } else {
+                            throw ρσ_Exception;
+                        }
+                    }
+                    break;
+                }
+            }
+        };
+        if (!Campaign.prototype._parseChatArchiveHTML.__argnames__) Object.defineProperties(Campaign.prototype._parseChatArchiveHTML, {
+            __argnames__ : {value: ["obj", "html"]}
+        });
+        Campaign.prototype._fetchChatArchive = function _fetchChatArchive(obj, done) {
+            var self = this;
+            var id, errorcb, cb;
+            id = self.newPendingOperation();
+            errorcb = function () {
+                if (self.completedOperation(id) && done) {
+                    done();
+                }
+            };
+            cb = (function() {
+                var ρσ_anonfunc = function (blob) {
+                    var f;
+                    f = new FileReader;
+                    f.onerror = errorcb;
+                    f.onabort = errorcb;
+                    f.onload = function () {
+                        self._parseChatArchiveHTML(obj, f.result);
+                        if (self.completedOperation(id) && done) {
+                            done();
+                        }
+                    };
+                    f.readAsText(blob);
+                };
+                if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                    __argnames__ : {value: ["blob"]}
+                });
+                return ρσ_anonfunc;
+            })();
+            self.downloadResource("https://app.roll20.net/campaigns/chatarchive/" + obj.campaign_id, cb, errorcb);
+        };
+        if (!Campaign.prototype._fetchChatArchive.__argnames__) Object.defineProperties(Campaign.prototype._fetchChatArchive, {
+            __argnames__ : {value: ["obj", "done"]}
+        });
         Campaign.prototype._parseCampaignDelayed = function _parseCampaignDelayed(result, cb) {
             var self = this;
             var done, id;
@@ -4997,6 +5066,8 @@ var str = ρσ_str, repr = ρσ_repr;;
             result.characters = self.parseCharacters(window.Campaign.characters, done);
             result.pages = self.parsePages(window.Campaign.pages);
             result.players = self.parsePlayers(window.Campaign.players);
+            result.jukebox = window.Jukebox.playlist.toJSON();
+            self._fetchChatArchive(result, done);
             if ((result.jukeboxfolder !== "" && (typeof result.jukeboxfolder !== "object" || ρσ_not_equals(result.jukeboxfolder, "")))) {
                 result.jukeboxfolder = JSON.parse(result.jukeboxfolder);
             }
@@ -5019,11 +5090,12 @@ var str = ρσ_str, repr = ρσ_repr;;
             num_loaded = self.loadArchivedPages();
             result = window.Campaign.toJSON();
             result.campaign_title = self.title;
+            result.campaign_id = window.campaign_id;
             self.campaign = result;
             delayed = function () {
                 self._parseCampaignDelayed(result, cb);
             };
-            console.log("Waiting ", num_loaded, " seconds for archived pages to finish loading");
+            console.log("Waiting ", num_loaded * 5, " seconds for archived pages to finish loading");
             setTimeout(delayed, num_loaded * 5e3);
             return result;
         };
@@ -5177,9 +5249,9 @@ var str = ρσ_str, repr = ρσ_repr;;
                 _list = ρσ_kwargs_obj._list;
             }
             var entry;
-            var ρσ_Iter6 = ρσ_Iterable(journal);
-            for (var ρσ_Index6 = 0; ρσ_Index6 < ρσ_Iter6.length; ρσ_Index6++) {
-                entry = ρσ_Iter6[ρσ_Index6];
+            var ρσ_Iter7 = ρσ_Iterable(journal);
+            for (var ρσ_Index7 = 0; ρσ_Index7 < ρσ_Iter7.length; ρσ_Index7++) {
+                entry = ρσ_Iter7[ρσ_Index7];
                 if ((typeof entry === "string" || typeof typeof entry === "object" && ρσ_equals(typeof entry, "string"))) {
                     _list.append(entry);
                 } else {
@@ -5248,9 +5320,9 @@ var str = ρσ_str, repr = ρσ_repr;;
             var self = this;
             var names, handout, name, handout_dir, character, char_dir, child_dir, journal_entry;
             names = ρσ_list_decorate([]);
-            var ρσ_Iter7 = ρσ_Iterable(journal);
-            for (var ρσ_Index7 = 0; ρσ_Index7 < ρσ_Iter7.length; ρσ_Index7++) {
-                journal_entry = ρσ_Iter7[ρσ_Index7];
+            var ρσ_Iter8 = ρσ_Iterable(journal);
+            for (var ρσ_Index8 = 0; ρσ_Index8 < ρσ_Iter8.length; ρσ_Index8++) {
+                journal_entry = ρσ_Iter8[ρσ_Index8];
                 if ((typeof journal_entry === "string" || typeof typeof journal_entry === "object" && ρσ_equals(typeof journal_entry, "string"))) {
                     handout = self.findID(journal_entry, "handout");
                     if (handout !== null) {
@@ -5278,6 +5350,52 @@ var str = ρσ_str, repr = ρσ_repr;;
         if (!Campaign.prototype._addJournalToZip.__argnames__) Object.defineProperties(Campaign.prototype._addJournalToZip, {
             __argnames__ : {value: ["folder", "journal", "finallyCB"]}
         });
+        Campaign.prototype._addPlaylistToZip = function _addPlaylistToZip(folder, playlist, finallyCB) {
+            var self = this;
+            var names, track, name, url, errorCB, child_dir, audio;
+            names = ρσ_list_decorate([]);
+            var ρσ_Iter9 = ρσ_Iterable(playlist);
+            for (var ρσ_Index9 = 0; ρσ_Index9 < ρσ_Iter9.length; ρσ_Index9++) {
+                audio = ρσ_Iter9[ρσ_Index9];
+                if ((typeof audio === "string" || typeof typeof audio === "object" && ρσ_equals(typeof audio, "string"))) {
+                    track = self.findID(audio, "track");
+                    if (track !== null) {
+                        name = self._makeNameUnique(names, track.title);
+                        if ((name[name.length-4] !== ".mp3" && (typeof name[name.length-4] !== "object" || ρσ_not_equals(name[name.length-4], ".mp3")))) {
+                            name += ".mp3";
+                        }
+                        if ((track.source === "My Audio" || typeof track.source === "object" && ρσ_equals(track.source, "My Audio"))) {
+                            url = "https://app.roll20.net/audio_library/play/" + track.track_id;
+                        } else if ((track.source === "Tabletop Audio" || typeof track.source === "object" && ρσ_equals(track.source, "Tabletop Audio"))) {
+                            url = "https://s3.amazonaws.com/cdn.roll20.net/ttaudio/" + track.track_id.split("-")[0];
+                        } else if ((track.source === "Fanburst" || typeof track.source === "object" && ρσ_equals(track.source, "Fanburst"))) {
+                            url = "https://api.fanburst.com/tracks/" + track.track_id + "/stream?client_id=0fc1df8b-40a4-4391-b0f7-d0257edb6634";
+                        } else if ((track.source === "Incompetech" || typeof track.source === "object" && ρσ_equals(track.source, "Incompetech"))) {
+                            url = "https://s3.amazonaws.com/cdn.roll20.net/incompetech/" + track.track_id.split("-")[0];
+                        } else {
+                            url = null;
+                            print("Can't download Audio track. Unsupported source : %s" % track.source);
+                        }
+                        if (url) {
+                            errorCB = function () {
+                                console.log("Couldn't download Jukebox audio from url : ", url);
+                            };
+                            self.downloadResource(url, self._makeAddBlobToZip(folder, name, finallyCB), errorCB);
+                        }
+                    } else {
+                        console.log("Can't find Audio Track with ID : ", track);
+                        continue;
+                    }
+                } else {
+                    name = self._makeNameUnique(names, audio.n);
+                    child_dir = folder.folder(name);
+                    self._addPlaylistToZip(child_dir, audio.i, finallyCB);
+                }
+            }
+        };
+        if (!Campaign.prototype._addPlaylistToZip.__argnames__) Object.defineProperties(Campaign.prototype._addPlaylistToZip, {
+            __argnames__ : {value: ["folder", "playlist", "finallyCB"]}
+        });
         Campaign.prototype._addPageToZip = function _addPageToZip(folder, page, finallyCB) {
             var self = this;
             var graphics, graphic;
@@ -5287,9 +5405,9 @@ var str = ρσ_str, repr = ρσ_repr;;
             }
             if (page.graphics.length > 0) {
                 graphics = folder.folder("graphics");
-                var ρσ_Iter8 = ρσ_Iterable(page.graphics);
-                for (var ρσ_Index8 = 0; ρσ_Index8 < ρσ_Iter8.length; ρσ_Index8++) {
-                    graphic = ρσ_Iter8[ρσ_Index8];
+                var ρσ_Iter10 = ρσ_Iterable(page.graphics);
+                for (var ρσ_Index10 = 0; ρσ_Index10 < ρσ_Iter10.length; ρσ_Index10++) {
+                    graphic = ρσ_Iter10[ρσ_Index10];
                     self.downloadR20Resource(graphics, graphic.id, graphic.imgsrc, finallyCB);
                 }
             }
@@ -5336,9 +5454,9 @@ var str = ρσ_str, repr = ρσ_repr;;
             if (self.campaign.characters.length > 0) {
                 characters = self.zip.folder("characters");
                 names = ρσ_list_decorate([]);
-                var ρσ_Iter9 = ρσ_Iterable(self.campaign.characters);
-                for (var ρσ_Index9 = 0; ρσ_Index9 < ρσ_Iter9.length; ρσ_Index9++) {
-                    character = ρσ_Iter9[ρσ_Index9];
+                var ρσ_Iter11 = ρσ_Iterable(self.campaign.characters);
+                for (var ρσ_Index11 = 0; ρσ_Index11 < ρσ_Iter11.length; ρσ_Index11++) {
+                    character = ρσ_Iter11[ρσ_Index11];
                     name = self._makeNameUnique(names, character.name);
                     char_dir = characters.folder(name);
                     self._addCharacterToZip(char_dir, character, checkZipDone);
@@ -5360,9 +5478,9 @@ var str = ρσ_str, repr = ρσ_repr;;
                 all_ids = self._flattenJournalEntries(self.campaign.journalfolder);
                 orphaned = ρσ_list_decorate([]);
                 archived = ρσ_list_decorate([]);
-                var ρσ_Iter10 = ρσ_Iterable(self.campaign.handouts);
-                for (var ρσ_Index10 = 0; ρσ_Index10 < ρσ_Iter10.length; ρσ_Index10++) {
-                    handout = ρσ_Iter10[ρσ_Index10];
+                var ρσ_Iter12 = ρσ_Iterable(self.campaign.handouts);
+                for (var ρσ_Index12 = 0; ρσ_Index12 < ρσ_Iter12.length; ρσ_Index12++) {
+                    handout = ρσ_Iter12[ρσ_Index12];
                     if (!ρσ_in(handout.id, all_ids)) {
                         orphaned.append(handout.id);
                     } else if (handout.archived) {
@@ -5417,6 +5535,21 @@ var str = ρσ_str, repr = ρσ_repr;;
         if (!Campaign.prototype._saveCampaignZipPages.__argnames__) Object.defineProperties(Campaign.prototype._saveCampaignZipPages, {
             __argnames__ : {value: ["checkZipDone"]}
         });
+        Campaign.prototype._saveCampaignZipJukebox = function _saveCampaignZipJukebox(checkZipDone) {
+            var self = this;
+            var jukebox;
+            console.log("Saving Jukebox audio");
+            if (self.campaign.jukeboxfolder.length > 0) {
+                jukebox = self.zip.folder("jukebox");
+                self._addPlaylistToZip(jukebox, self.campaign.jukeboxfolder, checkZipDone);
+            }
+            self.savingStep = 5;
+            self.savingPageIdx = 0;
+            checkZipDone();
+        };
+        if (!Campaign.prototype._saveCampaignZipJukebox.__argnames__) Object.defineProperties(Campaign.prototype._saveCampaignZipJukebox, {
+            __argnames__ : {value: ["checkZipDone"]}
+        });
         Campaign.prototype.saveCampaignZip = function saveCampaignZip() {
             var self = this;
             var filename = (arguments[0] === undefined || ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? saveCampaignZip.__defaults__.filename : arguments[0];
@@ -5455,6 +5588,8 @@ var str = ρσ_str, repr = ρσ_repr;;
                         self._saveCampaignZipPages(checkZipDone);
                     } else if ((self.savingStep === 3 || typeof self.savingStep === "object" && ρσ_equals(self.savingStep, 3))) {
                         self._saveCampaignZipPage(checkZipDone);
+                    } else if ((self.savingStep === 4 || typeof self.savingStep === "object" && ρσ_equals(self.savingStep, 4))) {
+                        self._saveCampaignZipJukebox(checkZipDone);
                     } else {
                         self._saveZipToFile(zip, filename);
                         self.zip = null;
