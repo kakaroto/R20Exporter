@@ -4671,6 +4671,7 @@ var str = ρσ_str, repr = ρσ_repr;;
             self.campaign = {};
             self.zip = null;
             self._pending_operations = ρσ_list_decorate([]);
+            self._total_size = 0;
         };
         if (!Campaign.prototype.__init__.__argnames__) Object.defineProperties(Campaign.prototype.__init__, {
             __argnames__ : {value: ["title"]}
@@ -4690,6 +4691,7 @@ var str = ρσ_str, repr = ρσ_repr;;
         };
         Campaign.prototype.completedOperation = function completedOperation(id) {
             var self = this;
+            var left, display;
             try {
                 self._pending_operations.remove(id);
             } catch (ρσ_Exception) {
@@ -4697,7 +4699,11 @@ var str = ρσ_str, repr = ρσ_repr;;
                 {
                 } 
             }
-            console.log("Completed Operation ", id, " we have ", self._pending_operations.length, " remaining operations");
+            left = self._pending_operations.length;
+            display = left > 100 && ρσ_equals(left % 100, 0) || left < 100 && ρσ_equals(left % 10, 0) || left < 10;
+            if (display) {
+                console.log(str(left) + " pending operations remaining");
+            }
             return !self.hasPendingOperation();
         };
         if (!Campaign.prototype.completedOperation.__argnames__) Object.defineProperties(Campaign.prototype.completedOperation, {
@@ -4752,6 +4758,18 @@ var str = ρσ_str, repr = ρσ_repr;;
             __defaults__ : {value: {obj_type:null}},
             __handles_kwarg_interpolation__ : {value: true},
             __argnames__ : {value: ["id", "obj_type"]}
+        });
+        Campaign.prototype.addFileToZip = function addFileToZip(zip, filename, content) {
+            var self = this;
+            zip.file(filename, content);
+            if (ρσ_exists.n(content.size)) {
+                self._total_size += content.size;
+            } else if (ρσ_exists.n(content.length)) {
+                self._total_size += content.length;
+            }
+        };
+        if (!Campaign.prototype.addFileToZip.__argnames__) Object.defineProperties(Campaign.prototype.addFileToZip, {
+            __argnames__ : {value: ["zip", "filename", "content"]}
         });
         Campaign.prototype.parsePage = function parsePage(page) {
             var self = this;
@@ -5269,7 +5287,7 @@ var str = ρσ_str, repr = ρσ_repr;;
             var self = this;
             return (function() {
                 var ρσ_anonfunc = function (blob) {
-                    folder.file(filename, blob);
+                    self.addFileToZip(folder, filename, blob);
                     finallyCB();
                 };
                 if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
@@ -5283,7 +5301,7 @@ var str = ρσ_str, repr = ρσ_repr;;
         });
         Campaign.prototype._addCharacterToZip = function _addCharacterToZip(folder, character, finallyCB) {
             var self = this;
-            folder.file("character.json", toBlob(character));
+            self.addFileToZip(folder, "character.json", toBlob(character));
             if ((ρσ_exists.e(character.avatar, "") !== "" && (typeof ρσ_exists.e(character.avatar, "") !== "object" || ρσ_not_equals(ρσ_exists.e(character.avatar, ""), "")))) {
                 self.downloadR20Resource(folder, "avatar", character.avatar, finallyCB);
             }
@@ -5291,10 +5309,10 @@ var str = ρσ_str, repr = ρσ_repr;;
                 self.downloadR20Resource(folder, "token", character.defaulttoken.imgsrc, finallyCB);
             }
             if ((ρσ_exists.e(character.bio, "") !== "" && (typeof ρσ_exists.e(character.bio, "") !== "object" || ρσ_not_equals(ρσ_exists.e(character.bio, ""), "")))) {
-                folder.file("bio.html", new Blob(ρσ_list_decorate([ character.bio ])));
+                self.addFileToZip(folder, "bio.html", new Blob(ρσ_list_decorate([ character.bio ])));
             }
             if ((ρσ_exists.e(character.gmnotes, "") !== "" && (typeof ρσ_exists.e(character.gmnotes, "") !== "object" || ρσ_not_equals(ρσ_exists.e(character.gmnotes, ""), "")))) {
-                folder.file("gmnotes.html", new Blob(ρσ_list_decorate([ character.gmnotes ])));
+                self.addFileToZip(folder, "gmnotes.html", new Blob(ρσ_list_decorate([ character.gmnotes ])));
             }
         };
         if (!Campaign.prototype._addCharacterToZip.__argnames__) Object.defineProperties(Campaign.prototype._addCharacterToZip, {
@@ -5302,15 +5320,15 @@ var str = ρσ_str, repr = ρσ_repr;;
         });
         Campaign.prototype._addHandoutToZip = function _addHandoutToZip(folder, handout, finallyCB) {
             var self = this;
-            folder.file("handout.json", toBlob(handout));
+            self.addFileToZip(folder, "handout.json", toBlob(handout));
             if ((ρσ_exists.e(handout.avatar, "") !== "" && (typeof ρσ_exists.e(handout.avatar, "") !== "object" || ρσ_not_equals(ρσ_exists.e(handout.avatar, ""), "")))) {
                 self.downloadR20Resource(folder, "avatar", handout.avatar, finallyCB);
             }
             if ((ρσ_exists.e(handout.notes, "") !== "" && (typeof ρσ_exists.e(handout.notes, "") !== "object" || ρσ_not_equals(ρσ_exists.e(handout.notes, ""), "")))) {
-                folder.file("notes.html", new Blob(ρσ_list_decorate([ handout.notes ])));
+                self.addFileToZip(folder, "notes.html", new Blob(ρσ_list_decorate([ handout.notes ])));
             }
             if ((ρσ_exists.e(handout.gmnotes, "") !== "" && (typeof ρσ_exists.e(handout.gmnotes, "") !== "object" || ρσ_not_equals(ρσ_exists.e(handout.gmnotes, ""), "")))) {
-                folder.file("gmnotes.html", new Blob(ρσ_list_decorate([ handout.gmnotes ])));
+                self.addFileToZip(folder, "gmnotes.html", new Blob(ρσ_list_decorate([ handout.gmnotes ])));
             }
         };
         if (!Campaign.prototype._addHandoutToZip.__argnames__) Object.defineProperties(Campaign.prototype._addHandoutToZip, {
@@ -5368,13 +5386,11 @@ var str = ρσ_str, repr = ρσ_repr;;
                             url = "https://app.roll20.net/audio_library/play/" + track.track_id;
                         } else if ((track.source === "Tabletop Audio" || typeof track.source === "object" && ρσ_equals(track.source, "Tabletop Audio"))) {
                             url = "https://s3.amazonaws.com/cdn.roll20.net/ttaudio/" + track.track_id.split("-")[0];
-                        } else if ((track.source === "Fanburst" || typeof track.source === "object" && ρσ_equals(track.source, "Fanburst"))) {
-                            url = "https://api.fanburst.com/tracks/" + track.track_id + "/stream?client_id=0fc1df8b-40a4-4391-b0f7-d0257edb6634";
                         } else if ((track.source === "Incompetech" || typeof track.source === "object" && ρσ_equals(track.source, "Incompetech"))) {
                             url = "https://s3.amazonaws.com/cdn.roll20.net/incompetech/" + track.track_id.split("-")[0];
                         } else {
                             url = null;
-                            print("Can't download Audio track. Unsupported source : %s" % track.source);
+                            console.log("Can't download Audio track (", track.title, "). Unsupported source : ", track.source);
                         }
                         if (url) {
                             errorCB = function () {
@@ -5399,7 +5415,7 @@ var str = ρσ_str, repr = ρσ_repr;;
         Campaign.prototype._addPageToZip = function _addPageToZip(folder, page, finallyCB) {
             var self = this;
             var graphics, graphic;
-            folder.file("page.json", toBlob(page));
+            self.addFileToZip(folder, "page.json", toBlob(page));
             if ((ρσ_exists.e(page.thumbnail, "") !== "" && (typeof ρσ_exists.e(page.thumbnail, "") !== "object" || ρσ_not_equals(ρσ_exists.e(page.thumbnail, ""), "")))) {
                 self.downloadR20Resource(folder, "thumbnail", page.thumbnail, finallyCB);
             }
@@ -5418,7 +5434,12 @@ var str = ρσ_str, repr = ρσ_repr;;
         Campaign.prototype._saveZipToFile = function _saveZipToFile(zip, filename) {
             var self = this;
             var writeStream;
-            writeStream = streamSaver.createWriteStream(filename).getWriter();
+            console.log("Done! Generating ZIP file with ", self._total_size, " bytes of data");
+            writeStream = streamSaver.createWriteStream(filename, (function(){
+                var ρσ_d = {};
+                ρσ_d["size"] = self._total_size;
+                return ρσ_d;
+            }).call(this)).getWriter();
             zip.generateInternalStream((function(){
                 var ρσ_d = {};
                 ρσ_d["type"] = "uint8array";
@@ -5558,15 +5579,15 @@ var str = ρσ_str, repr = ρσ_repr;;
             if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "filename")){
                 filename = ρσ_kwargs_obj.filename;
             }
-            var zip, saveZip, checkZipDone;
+            var saveZip, checkZipDone;
             if (self.zip !== null) {
                 console.error("Saving already in progress. Can't be cancelled.");
                 return;
             }
             filename = (filename) ? filename : self.title + ".zip";
-            zip = new JSZip;
-            zip.file("campaign.json", toJSON(self.campaign));
-            self.zip = zip;
+            self.zip = new JSZip;
+            self._total_size = 0;
+            self.addFileToZip(self.zip, "campaign.json", toBlob(self.campaign));
             saveZip = (function() {
                 var ρσ_anonfunc = function (blob) {
                     saveAs(blob, filename);
@@ -5591,7 +5612,7 @@ var str = ρσ_str, repr = ρσ_repr;;
                     } else if ((self.savingStep === 4 || typeof self.savingStep === "object" && ρσ_equals(self.savingStep, 4))) {
                         self._saveCampaignZipJukebox(checkZipDone);
                     } else {
-                        self._saveZipToFile(zip, filename);
+                        self._saveZipToFile(self.zip, filename);
                         self.zip = null;
                     }
                 }

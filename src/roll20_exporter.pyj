@@ -11,6 +11,7 @@ class Campaign:
         self.campaign = {}
         self.zip = None
         self._pending_operations = []
+        self._total_size = 0
 
     def newPendingOperation(self):
         id = str(uuid.uuid4())
@@ -25,7 +26,10 @@ class Campaign:
             self._pending_operations.remove(id)
         except:
             pass
-        console.log("Completed Operation ", id, " we have ", self._pending_operations.length, " remaining operations")
+        left = self._pending_operations.length
+        display = (left > 100 and left % 100 == 0) or (left < 100 and left % 10 == 0) or left < 10
+        if display:
+            console.log(str(left) + " pending operations remaining")
         return not self.hasPendingOperation()
 
     def findID(self, id, obj_type=None):
@@ -48,6 +52,13 @@ class Campaign:
             if track?:
                 return track
         return None
+
+    def addFileToZip(self, zip, filename, content):
+        zip.file(filename, content)
+        if content.size?:
+            self._total_size += content.size
+        elif content.length?:
+            self._total_size += content.length
 
     def parsePage(self, page):
         data = page.toJSON()
@@ -306,28 +317,28 @@ class Campaign:
 
     def _makeAddBlobToZip(self, folder, filename, finallyCB):
         return def(blob):
-            folder.file(filename, blob)
+            self.addFileToZip(folder, filename, blob)
             finallyCB()
 
     def _addCharacterToZip(self, folder, character, finallyCB):
-        folder.file("character.json", toBlob(character))
+        self.addFileToZip(folder, "character.json", toBlob(character))
         if (character.avatar? "") != "":
             self.downloadR20Resource(folder, "avatar", character.avatar, finallyCB)
         if character.defaulttoken? and (character.defaulttoken.imgsrc? "") != "":
             self.downloadR20Resource(folder, "token", character.defaulttoken.imgsrc, finallyCB)
         if (character.bio? "") != "":
-            folder.file("bio.html", new Blob([character.bio]))
+            self.addFileToZip(folder, "bio.html", new Blob([character.bio]))
         if (character.gmnotes? "") != "":
-            folder.file("gmnotes.html", new Blob([character.gmnotes]))
+            self.addFileToZip(folder, "gmnotes.html", new Blob([character.gmnotes]))
 
     def _addHandoutToZip(self, folder, handout, finallyCB):
-        folder.file("handout.json", toBlob(handout))
+        self.addFileToZip(folder, "handout.json", toBlob(handout))
         if (handout.avatar? "") != "":
             self.downloadR20Resource(folder, "avatar", handout.avatar, finallyCB)
         if (handout.notes? "") != "":
-            folder.file("notes.html", new Blob([handout.notes]))
+            self.addFileToZip(folder, "notes.html", new Blob([handout.notes]))
         if (handout.gmnotes? "") != "":
-            folder.file("gmnotes.html", new Blob([handout.gmnotes]))
+            self.addFileToZip(folder, "gmnotes.html", new Blob([handout.gmnotes]))
 
     def _addJournalToZip(self, folder, journal, finallyCB):
         names = []
@@ -369,7 +380,7 @@ class Campaign:
                         url =  "https://s3.amazonaws.com/cdn.roll20.net/incompetech/" + track.track_id.split("-")[0]
                     else:
                         url = None
-                        print("Can't download Audio track. Unsupported source : %s" % track.source)
+                        console.log("Can't download Audio track (", track.title , "). Unsupported source : ", track.source)
                     if url:
                         errorCB = def():
                             console.log("Couldn't download Jukebox audio from url : ", url)
@@ -383,7 +394,7 @@ class Campaign:
                 self._addPlaylistToZip(child_dir, audio.i, finallyCB)
 
     def _addPageToZip(self, folder, page, finallyCB):
-        folder.file("page.json", toBlob(page))
+        self.addFileToZip(folder, "page.json", toBlob(page))
         if (page.thumbnail? "") != "":
             self.downloadR20Resource(folder, "thumbnail", page.thumbnail, finallyCB)
         if page.graphics.length > 0:
@@ -392,7 +403,8 @@ class Campaign:
                 self.downloadR20Resource(graphics, graphic.id, graphic.imgsrc, finallyCB)
 
     def _saveZipToFile(self, zip, filename):
-        writeStream = streamSaver.createWriteStream(filename).getWriter()
+        console.log("Done! Generating ZIP file with ", self._total_size, " bytes of data")
+        writeStream = streamSaver.createWriteStream(filename, {"size": self._total_size}).getWriter()
         zip.generateInternalStream({"type": "uint8array", "streamFiles": True}) \
             .on('data', def(data):
                     writeStream.write(data)
@@ -475,9 +487,9 @@ class Campaign:
             console.error("Saving already in progress. Can't be cancelled.")
             return
         filename = filename if filename else (self.title + ".zip")
-        zip = new JSZip()
-        zip.file('campaign.json', toJSON(self.campaign))
-        self.zip = zip
+        self.zip = new JSZip()
+        self._total_size = 0
+        self.addFileToZip(self.zip, 'campaign.json', toBlob(self.campaign))
         saveZip = def(blob):
             saveAs(blob, filename)
         self.savingStep = 0
@@ -495,7 +507,7 @@ class Campaign:
                 elif self.savingStep == 4:
                     self._saveCampaignZipJukebox(checkZipDone)
                 else:
-                    self._saveZipToFile(zip, filename)
+                    self._saveZipToFile(self.zip, filename)
                     self.zip = None
 
         checkZipDone()
