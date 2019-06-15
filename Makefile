@@ -1,13 +1,28 @@
-%.js: %.pyj
-	rapydscript $< --output $@
 
-JS_FILES=src/roll20_exporter.js r20exporter.js
+JS_FILES=src/roll20_exporter.js r20exporter.js dist/R20Exporter.js
 CONVERT_FLAGS=--restrict-movement --enable-fog --use-original-image-urls $(CONVERT_OPTIONS)
+
+%.js: %.pyj
+	rapydscript lint $< || true
+	rapydscript $(PYJ_FLAGS) $< --output $@
+
 
 all: $(JS_FILES)
 
-r20exporter.js: tampermonkey.header libs/StreamSaver.js libs/FileSaver.js libs/jszip.min.js src/roll20_exporter.js
+
+r20exporter.js: tampermonkey.header  src/roll20_exporter.js
 	cat $^ > $@
+
+dist/R20Exporter.js: tampermonkey.header  src/roll20_exporter.js
+	mkdir -p dist/
+	cat tampermonkey.header > $@
+	yuicompressor libs/FileSaver.js >> $@
+	yuicompressor libs/zipjs/zip.js >> $@
+	yuicompressor libs/zipjs/zip-fs.js >> $@
+	yuicompressor libs/zipjs/zip-ext.js >> $@
+	yuicompressor libs/zipjs/deflate.js >> $@
+	cat src/roll20_exporter.js >> $@
+
 
 build: all
 	rm -f *~ */*~ src/*.pyj-cached 

@@ -26,13 +26,13 @@ You first need to give it the name of the directory to which you want it to expo
 I personally run it this way on linux : 
 
 ```
-./src/tofvtt.py --auto-doors --enable-fog --restrict-movement world-name "My R20 campaign.zip"
+./src/tofvtt.py --auto-doors --enable-fog --restrict-movement "my-world" "My R20 campaign.zip"
 ```
 
 If you are on Windows and use the windows binary, open a command prompt (cmd.exe) and go to the directory where the script is, then run tofvtt.exe with the options you want.
 
 ```
-C:\Users\kakaroto\Downloads\R20Converter\tofvtt.exe --auto-doors --enable-fog --restrict-movement world-name "My R20 campaign.zip"
+C:\Users\kakaroto\Downloads\R20Converter\tofvtt.exe --auto-doors --enable-fog --restrict-movement "my-world" "My R20 campaign.zip"
 
 If you see a "Page '<page name>' doesn't have a recognizable map background" message on the console, don't worry about it, it just means that the background image size does not fit exactly the size of the page itself, the background image will then be placed as a Tile instead.
 

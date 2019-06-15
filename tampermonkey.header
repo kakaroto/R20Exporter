@@ -6,8 +6,5 @@
 // @author       KaKaRoTo
 // @match        https://app.roll20.net/editor/
 // @grant        none
-// @require	 https://raw.githubusercontent.com/Stuk/jszip/master/dist/jszip.min.js
-// @require	 https://raw.githubusercontent.com/jimmywarting/StreamSaver.js/master/StreamSaver.js
-// @require 	 https://ajax.googleapis.com/ajax/libs/jquery/3.4.0/jquery.min.js
 // ==/UserScript==
 
