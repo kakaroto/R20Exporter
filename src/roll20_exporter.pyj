@@ -127,7 +127,7 @@ class Campaign:
         DIV = [1, 1024, 1024 * 1024, 1024 * 1024 * 1024]
         size = self._total_size
         div = 0
-        while (size / 1024) > 0 and div +1 < DIV.length:
+        while (size / 1024) > 1 and div +1 < DIV.length:
             size /= 1024
             div += 1
         console.log("Done downloading resources!")
@@ -539,7 +539,7 @@ class Campaign:
             page = self.campaign.pages[self.savingPageIdx]
             self.savingPageIdx += 1
             name = page.name if len(page.name) > 0  else "Untitled"
-            console.log("Saving Page : ", name)
+            console.log("Saving Page : ", name, "(", self.savingPageIdx, "/", self.campaign.pages.length, ")")
             name = self._makeNameUnique(self.names, name)
             page_dir = self._addZipFolder(self.pages, name)
             self._addPageToZip(page_dir, page, checkZipDone)

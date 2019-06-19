@@ -21,6 +21,7 @@ dist/R20Exporter.js: tampermonkey.header  src/roll20_exporter.js
 	yuicompressor libs/zipjs/zip-fs.js >> $@
 	yuicompressor libs/zipjs/zip-ext.js >> $@
 	yuicompressor libs/zipjs/deflate.js >> $@
+	echo "window.zip = zip;" >> $@ ;# Needed to expose the zip interface to the exporter in tampermonkey
 	cat src/roll20_exporter.js >> $@
 
 

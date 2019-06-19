@@ -6,6 +6,12 @@
 // @author       KaKaRoTo
 // @match        https://app.roll20.net/editor/
 // @grant        none
+// @require 	 https://ajax.googleapis.com/ajax/libs/jquery/3.4.0/jquery.min.js
+// @require	 https://github.com/eligrey/FileSaver.js/blob/master/dist/FileSaver.min.js
+// @require	 https://github.com/gildas-lormeau/zip.js/blob/master/WebContent/zip.js
+// @require	 https://github.com/gildas-lormeau/zip.js/blob/master/WebContent/zip-fs.js
+// @require	 https://github.com/gildas-lormeau/zip.js/blob/master/WebContent/zip-ext.js
+// @require	 https://github.com/gildas-lormeau/zip.js/blob/master/WebContent/deflate.js
 // ==/UserScript==
 
 /*! FileSaver.js
@@ -4328,7 +4334,7 @@ var str = ρσ_str, repr = ρσ_repr;;
             DIV = ρσ_list_decorate([ 1, 1024, 1024 * 1024, 1024 * 1024 * 1024 ]);
             size = self._total_size;
             div = 0;
-            while (size / 1024 > 0 && div + 1 < DIV.length) {
+            while (size / 1024 > 1 && div + 1 < DIV.length) {
                 size /= 1024;
                 div += 1;
             }
@@ -5147,7 +5153,7 @@ var str = ρσ_str, repr = ρσ_repr;;
                 page = (ρσ_expr_temp = self.campaign.pages)[ρσ_bound_index(self.savingPageIdx, ρσ_expr_temp)];
                 self.savingPageIdx += 1;
                 name = (len(page.name) > 0) ? page.name : "Untitled";
-                console.log("Saving Page : ", name);
+                console.log("Saving Page : ", name, "(", self.savingPageIdx, "/", self.campaign.pages.length, ")");
                 name = self._makeNameUnique(self.names, name);
                 page_dir = self._addZipFolder(self.pages, name);
                 self._addPageToZip(page_dir, page, checkZipDone);
