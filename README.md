@@ -3,15 +3,16 @@ This project has two apps in it, one for exporting your campaign from Roll 20, t
 # R20Exporter
 
 For now, this is how you do it (Eventually I'll make it integrate UI elements into the page):
-* or just follow these instructions : 
+You can either install the script as a [Tampermonkey](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo?hl=en) user script, or, if you don't use or don't want to use Tampermonkey, then you can also open the file and copy/paste its content in the browser's console instead.
+If you use Tampermonkey, then install the dist/R20Exporter.js file as a user script then reload your R20 campaign page and follow these instructions, skipping Step 4, otherwise, follow these entire instructions : 
 
-1 - Open R20 campaign in chrome (Make sure you have the latest version of chrome, it will not work in Firefox), 
+1 - Open R20 campaign in chrome (Make sure you have the latest version of chrome, as it will not work in Firefox), 
 2 - Wait for it to finish loading the page, 
 3 - press Ctrl-Alt-J to open the development console. 
-4 - copy-paste the whole R20Exporter.js file contents into the development console and press Enter.
-7 - Type : R20Exporter.exportCampaignZip()
-8 - Wait for it to parse all the data, could take a few minutes as it downloads all of the assets
-9 - Zip file will start downloading once it's done.
+4 - If you haven't installed R20Exporter.js as a Tampermonkey script, then copy-paste the whole R20Exporter_standalone.js file contents into the development console and press Enter.
+5 - Type : R20Exporter.exportCampaignZip()
+6 - Wait for it to parse all the data, could take a few minutes as it downloads all of the assets
+7 - Zip file will start downloading once it's done.
 
 While generating the ZIP file, do make sure you have the campaign tab focused in chrome (separate it in its own window if needed), otherwise the download speed of the zip will drop to very very slow transfer speeds since the javascript that generates the zip on the fly will be running as a low priority background process.
 

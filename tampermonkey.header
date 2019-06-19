@@ -7,10 +7,10 @@
 // @match        https://app.roll20.net/editor/
 // @grant        none
 // @require 	 https://ajax.googleapis.com/ajax/libs/jquery/3.4.0/jquery.min.js
-// @require	 https://github.com/eligrey/FileSaver.js/blob/master/dist/FileSaver.min.js
-// @require	 https://github.com/gildas-lormeau/zip.js/blob/master/WebContent/zip.js
-// @require	 https://github.com/gildas-lormeau/zip.js/blob/master/WebContent/zip-fs.js
-// @require	 https://github.com/gildas-lormeau/zip.js/blob/master/WebContent/zip-ext.js
-// @require	 https://github.com/gildas-lormeau/zip.js/blob/master/WebContent/deflate.js
+// @require 	 https://raw.githubusercontent.com/eligrey/FileSaver.js/master/dist/FileSaver.min.js
+// @require 	 https://raw.githubusercontent.com/gildas-lormeau/zip.js/master/WebContent/zip.js
+// @require 	 https://raw.githubusercontent.com/gildas-lormeau/zip.js/master/WebContent/zip-fs.js
+// @require 	 https://raw.githubusercontent.com/gildas-lormeau/zip.js/master/WebContent/zip-ext.js
+// @require 	 https://raw.githubusercontent.com/gildas-lormeau/zip.js/master/WebContent/deflate.js
 // ==/UserScript==
 

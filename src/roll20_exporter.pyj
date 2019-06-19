@@ -2,6 +2,7 @@ import uuid
 
 def toJSON(obj):
     return JSON.stringify(obj, undefined, 4)
+
 def toBlob(obj):
     return new Blob([toJSON(obj)], {"type": 'text/json'})
 
