@@ -33,6 +33,9 @@ class Campaign:
             console.log("Download operations still in progress : ", left)
         return not self.hasPendingOperation()
 
+    def clearPendingOperations(self):
+        self._pending_operations = []
+        
     def findID(self, id, obj_type=None):
         find_id = def (o): return o.id == id
         if obj_type == "handout" or obj_type is None:
@@ -356,6 +359,29 @@ class Campaign:
     def exportCampaign(self):
         self.exportCampaignJson()
 
+    def _imageToBlob(self, img, id, cb):
+        c = document.createElement("canvas")
+        ctx = c.getContext("2d")
+        c.width = img.naturalWidth
+        c.height = img.naturalHeight
+        ctx.drawImage(img, 0, 0)
+        c.toBlob(def(blob):
+                     self.completedOperation(id)
+                     cb(blob)
+                 , "image/jpeg", 0.75)
+
+    def downloadImageViaCanvas(self, url, cb, errorCB=None):
+        id = self.newPendingOperation()
+        img = new Image()
+        img.onload = def(ev):
+            self._imageToBlob(img, id, cb)
+        img.onerror = def(error):
+            self.completedOperation(id)
+            if errorCB:
+                errorCB()
+        img.crossOrigin = ""
+        img.src = url
+
     def downloadResource(self, url, cb, errorCB=None):
         id = self.newPendingOperation()
         
@@ -369,7 +395,6 @@ class Campaign:
             if cb:
                 cb(blob)
         ).catch(def (error):
-            console.log("Error downloading ", url, " : ", error)
             self.completedOperation(id)
             if errorCB:
                 errorCB()
@@ -393,8 +418,10 @@ class Campaign:
                 self.downloadR20Resource(folder, prefix, url, finallyCB, try_files[1:])
             self.downloadResource(new_url, self._makeAddBlobToZip(folder, prefix + ".png", finallyCB), errorCB)
         else:
-            console.log("Couldn't download ", url, " with any alternative filename. Resource has become unavailable")
-            finallyCB()
+            self.downloadImageViaCanvas(url, self._makeAddBlobToZip(folder, prefix + ".png", finallyCB), def ():
+                                            console.log("Couldn't download ", url, " with any alternative filename. Resource has become unavailable")
+                                            finallyCB()
+                                        )
             
 
     def _makeNameUnique(self, names, orig_name):
@@ -468,17 +495,37 @@ class Campaign:
                     if name[-4] != ".mp3":
                         name += ".mp3"
                     if track.source == "My Audio":
-                        url = "https://app.roll20.net/audio_library/play/" + track.track_id
+                        url = "https://app.roll20.net/audio_library/play/" + self.campaign.campaign_id  + "/" + track.track_id
                     elif track.source == "Tabletop Audio":
                         url = "https://s3.amazonaws.com/cdn.roll20.net/ttaudio/" + track.track_id.split("-")[0]
                     elif track.source == "Incompetech":
                         url =  "https://s3.amazonaws.com/cdn.roll20.net/incompetech/" + track.track_id.split("-")[0]
+                    elif track.source == "Battlebards":
+                        url = None
+                        filename = track.track_id.split(".mp3-")[0] + ".mp3"
+                        filename = encodeURIComponent(filename.replace(/%20%2D%20/g, " - "))
+                        id = self.newPendingOperation()
+                        _makePostCB = def(folder, name, finallyCB, id):
+                            return def(url):
+                                errorCB = def():
+                                    console.log("Couldn't download Jukebox audio from url : ", url)
+                                self.completedOperation(id)
+                                self.downloadResource(url, self._makeAddBlobToZip(folder, name, finallyCB), errorCB)
+                        _makePostErrorCB = def(track_id, finallyCB, id):
+                            return def():
+                                console.log("Couldn't download Jukebox audio from Battlebards : ", track_id)
+                                self.completedOperation(id)
+                                finallyCB()
+                        
+                        $.post("/editor/audiourl/bb", {"trackurl": filename}, _makePostCB(folder, name, finallyCB, id)) \
+                            .fail(_makePostErrorCB(track.track_id, finallyCB, id))
                     else:
                         url = None
                         console.log("Can't download Audio track (", track.title , "). Unsupported source : ", track.source)
                     if url:
                         errorCB = def():
                             console.log("Couldn't download Jukebox audio from url : ", url)
+                            finallyCB()
                         self.downloadResource(url, self._makeAddBlobToZip(folder, name, finallyCB), errorCB)
                 else:
                     console.log("Can't find Audio Track with ID : ", track)
@@ -601,5 +648,6 @@ class Campaign:
 
 console.log("Roll20 Campaign exporter loaded.")
 console.log("To export your Roll20 campaign, enter R20Exporter.exportCampaignZip() and be patient.")
+console.log("Note that you should not open a different campaign in Roll20 as it can interfere with the download of some resources.")
 console.log("DISCLAIMER: Please note that using this tool to export a module from the marketplace may infringe on the Marketplace Asset License and/or Roll20 EULA.")
 window.R20Exporter = new Campaign(window.$("head title").text().trim().replace(" | Roll20", ""))

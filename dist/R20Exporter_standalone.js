@@ -4135,6 +4135,10 @@ var str = ρσ_str, repr = ρσ_repr;;
         if (!Campaign.prototype.completedOperation.__argnames__) Object.defineProperties(Campaign.prototype.completedOperation, {
             __argnames__ : {value: ["id"]}
         });
+        Campaign.prototype.clearPendingOperations = function clearPendingOperations() {
+            var self = this;
+            self._pending_operations = ρσ_list_decorate([]);
+        };
         Campaign.prototype.findID = function findID() {
             var self = this;
             var id = ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true) ? undefined : arguments[0];
@@ -4800,6 +4804,70 @@ var str = ρσ_str, repr = ρσ_repr;;
             var self = this;
             self.exportCampaignJson();
         };
+        Campaign.prototype._imageToBlob = function _imageToBlob(img, id, cb) {
+            var self = this;
+            var c, ctx;
+            c = document.createElement("canvas");
+            ctx = c.getContext("2d");
+            c.width = img.naturalWidth;
+            c.height = img.naturalHeight;
+            ctx.drawImage(img, 0, 0);
+            c.toBlob((function() {
+                var ρσ_anonfunc = function (blob) {
+                    self.completedOperation(id);
+                    cb(blob);
+                };
+                if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                    __argnames__ : {value: ["blob"]}
+                });
+                return ρσ_anonfunc;
+            })(), "image/jpeg", .75);
+        };
+        if (!Campaign.prototype._imageToBlob.__argnames__) Object.defineProperties(Campaign.prototype._imageToBlob, {
+            __argnames__ : {value: ["img", "id", "cb"]}
+        });
+        Campaign.prototype.downloadImageViaCanvas = function downloadImageViaCanvas() {
+            var self = this;
+            var url = ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true) ? undefined : arguments[0];
+            var cb = ( 1 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true) ? undefined : arguments[1];
+            var errorCB = (arguments[2] === undefined || ( 2 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? downloadImageViaCanvas.__defaults__.errorCB : arguments[2];
+            var ρσ_kwargs_obj = arguments[arguments.length-1];
+            if (ρσ_kwargs_obj === null || typeof ρσ_kwargs_obj !== "object" || ρσ_kwargs_obj [ρσ_kwargs_symbol] !== true) ρσ_kwargs_obj = {};
+            if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "errorCB")){
+                errorCB = ρσ_kwargs_obj.errorCB;
+            }
+            var id, img;
+            id = self.newPendingOperation();
+            img = new Image;
+            img.onload = (function() {
+                var ρσ_anonfunc = function (ev) {
+                    self._imageToBlob(img, id, cb);
+                };
+                if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                    __argnames__ : {value: ["ev"]}
+                });
+                return ρσ_anonfunc;
+            })();
+            img.onerror = (function() {
+                var ρσ_anonfunc = function (error) {
+                    self.completedOperation(id);
+                    if (errorCB) {
+                        errorCB();
+                    }
+                };
+                if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                    __argnames__ : {value: ["error"]}
+                });
+                return ρσ_anonfunc;
+            })();
+            img.crossOrigin = "";
+            img.src = url;
+        };
+        if (!Campaign.prototype.downloadImageViaCanvas.__defaults__) Object.defineProperties(Campaign.prototype.downloadImageViaCanvas, {
+            __defaults__ : {value: {errorCB:null}},
+            __handles_kwarg_interpolation__ : {value: true},
+            __argnames__ : {value: ["url", "cb", "errorCB"]}
+        });
         Campaign.prototype.downloadResource = function downloadResource() {
             var self = this;
             var url = ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true) ? undefined : arguments[0];
@@ -4837,7 +4905,6 @@ var str = ρσ_str, repr = ρσ_repr;;
                 return ρσ_anonfunc;
             })()).catch((function() {
                 var ρσ_anonfunc = function (error) {
-                    console.log("Error downloading ", url, " : ", error);
                     self.completedOperation(id);
                     if (errorCB) {
                         errorCB();
@@ -4880,8 +4947,10 @@ var str = ρσ_str, repr = ρσ_repr;;
                 };
                 self.downloadResource(new_url, self._makeAddBlobToZip(folder, prefix + ".png", finallyCB), errorCB);
             } else {
-                console.log("Couldn't download ", url, " with any alternative filename. Resource has become unavailable");
-                finallyCB();
+                self.downloadImageViaCanvas(url, self._makeAddBlobToZip(folder, prefix + ".png", finallyCB), function () {
+                    console.log("Couldn't download ", url, " with any alternative filename. Resource has become unavailable");
+                    finallyCB();
+                });
             }
         };
         if (!Campaign.prototype.downloadR20Resource.__defaults__) Object.defineProperties(Campaign.prototype.downloadR20Resource, {
@@ -5012,7 +5081,7 @@ var str = ρσ_str, repr = ρσ_repr;;
         });
         Campaign.prototype._addPlaylistToZip = function _addPlaylistToZip(folder, playlist, finallyCB) {
             var self = this;
-            var names, track, name, url, errorCB, child_dir, audio;
+            var names, track, name, url, filename, id, _makePostCB, _makePostErrorCB, errorCB, child_dir, audio;
             names = ρσ_list_decorate([]);
             var ρσ_Iter10 = ρσ_Iterable(playlist);
             for (var ρσ_Index10 = 0; ρσ_Index10 < ρσ_Iter10.length; ρσ_Index10++) {
@@ -5025,11 +5094,56 @@ var str = ρσ_str, repr = ρσ_repr;;
                             name += ".mp3";
                         }
                         if ((track.source === "My Audio" || typeof track.source === "object" && ρσ_equals(track.source, "My Audio"))) {
-                            url = "https://app.roll20.net/audio_library/play/" + track.track_id;
+                            url = "https://app.roll20.net/audio_library/play/" + self.campaign.campaign_id + "/" + track.track_id;
                         } else if ((track.source === "Tabletop Audio" || typeof track.source === "object" && ρσ_equals(track.source, "Tabletop Audio"))) {
                             url = "https://s3.amazonaws.com/cdn.roll20.net/ttaudio/" + track.track_id.split("-")[0];
                         } else if ((track.source === "Incompetech" || typeof track.source === "object" && ρσ_equals(track.source, "Incompetech"))) {
                             url = "https://s3.amazonaws.com/cdn.roll20.net/incompetech/" + track.track_id.split("-")[0];
+                        } else if ((track.source === "Battlebards" || typeof track.source === "object" && ρσ_equals(track.source, "Battlebards"))) {
+                            url = null;
+                            filename = track.track_id.split(".mp3-")[0] + ".mp3";
+                            filename = encodeURIComponent(filename.replace(/%20%2D%20/g, " - "));
+                            id = self.newPendingOperation();
+                            _makePostCB = (function() {
+                                var ρσ_anonfunc = function (folder, name, finallyCB, id) {
+                                    return (function() {
+                                        var ρσ_anonfunc = function (url) {
+                                            var errorCB;
+                                            errorCB = function () {
+                                                console.log("Couldn't download Jukebox audio from url : ", url);
+                                            };
+                                            self.completedOperation(id);
+                                            self.downloadResource(url, self._makeAddBlobToZip(folder, name, finallyCB), errorCB);
+                                        };
+                                        if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                                            __argnames__ : {value: ["url"]}
+                                        });
+                                        return ρσ_anonfunc;
+                                    })();
+                                };
+                                if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                                    __argnames__ : {value: ["folder", "name", "finallyCB", "id"]}
+                                });
+                                return ρσ_anonfunc;
+                            })();
+                            _makePostErrorCB = (function() {
+                                var ρσ_anonfunc = function (track_id, finallyCB, id) {
+                                    return function () {
+                                        console.log("Couldn't download Jukebox audio from Battlebards : ", track_id);
+                                        self.completedOperation(id);
+                                        finallyCB();
+                                    };
+                                };
+                                if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                                    __argnames__ : {value: ["track_id", "finallyCB", "id"]}
+                                });
+                                return ρσ_anonfunc;
+                            })();
+                            $.post("/editor/audiourl/bb", (function(){
+                                var ρσ_d = {};
+                                ρσ_d["trackurl"] = filename;
+                                return ρσ_d;
+                            }).call(this), _makePostCB(folder, name, finallyCB, id)).fail(_makePostErrorCB(track.track_id, finallyCB, id));
                         } else {
                             url = null;
                             console.log("Can't download Audio track (", track.title, "). Unsupported source : ", track.source);
@@ -5037,6 +5151,7 @@ var str = ρσ_str, repr = ρσ_repr;;
                         if (url) {
                             errorCB = function () {
                                 console.log("Couldn't download Jukebox audio from url : ", url);
+                                finallyCB();
                             };
                             self.downloadResource(url, self._makeAddBlobToZip(folder, name, finallyCB), errorCB);
                         }
@@ -5256,6 +5371,7 @@ var str = ρσ_str, repr = ρσ_repr;;
 
         console.log("Roll20 Campaign exporter loaded.");
         console.log("To export your Roll20 campaign, enter R20Exporter.exportCampaignZip() and be patient.");
+        console.log("Note that you should not open a different campaign in Roll20 as it can interfere with the download of some resources.");
         console.log("DISCLAIMER: Please note that using this tool to export a module from the marketplace may infringe on the Marketplace Asset License and/or Roll20 EULA.");
         window.R20Exporter = new Campaign(window.$("head title").text().trim().replace(" | Roll20", ""));
     })();
