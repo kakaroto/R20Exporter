@@ -7,16 +7,27 @@ def toBlob(obj):
     return new Blob([toJSON(obj)], {"type": 'text/json'})
 
 class Campaign:
+    TOTAL_STEPS = 8
     def __init__(self, title):
         self.title = title
         self.campaign = {}
         self.zip = None
         self._pending_operations = []
         self._total_size = 0
+        self.console = new ModalWindow("Exporting Campaign to ZIP file", "r20exporter-modal")
+        self.console.warn("Note that you should not open a different campaign in Roll20 as it can interfere with the download of some resources.")
+        self.console.warn("<strong>DISCLAIMER: Please note that using this tool to export a module from the marketplace may infringe on the Marketplace Asset License and/or Roll20 EULA.</strong>")
+        $('#r20exporter').remove()
+        button = $('<a class="btn" id="r20exporter">Export Campaign to ZIP</a>')
+        content = $("#mysettings .content")
+        content.prepend(button)
+        button.css("width", "calc(100% - " + content.css("padding-right") + " - " + content.css("padding-left") + ")")
+        button.on('click', def(): self.exportCampaignZip();)
 
     def newPendingOperation(self):
         id = str(uuid.uuid4())
         self._pending_operations.append(id)
+        self._updateSecondProgress()
         return id
 
     def hasPendingOperation(self):
@@ -27,15 +38,23 @@ class Campaign:
             self._pending_operations.remove(id)
         except:
             pass
-        left = self._pending_operations.length
-        display = (left > 100 and left % 100 == 0) or (left < 100 and left % 10 == 0)
-        if display:
-            console.log("Download operations still in progress : ", left)
+        self._updateSecondProgress()
         return not self.hasPendingOperation()
 
     def clearPendingOperations(self):
         self._pending_operations = []
+        self._updateSecondProgress()
         
+    def _updateSecondProgress(self):
+        left = self._pending_operations.length
+        self.console.setLabel2(str(left) + " operations in progress")
+        total = self.console.second_progress.total
+        if left > total:
+            total = left
+        if left == 0:
+            left = total = 1
+        self.console.setProgress2(total - left, total)
+
     def findID(self, id, obj_type=None):
         find_id = def (o): return o.id == id
         if obj_type == "handout" or obj_type is None:
@@ -134,11 +153,13 @@ class Campaign:
         while (size / 1024) > 1 and div +1 < DIV.length:
             size /= 1024
             div += 1
-        console.log("Done downloading resources!")
-        console.log("Generating ZIP file with ", size.toFixed(2), BYTES[div] + " of data")
-        console.warn("It is highly recommended to keep this tab focused and the window non-minimized during the entire process\n"
+        self.console.warn("Done downloading resources!")
+        self.console.warn("It is highly recommended to keep this tab focused and the window non-minimized during the entire process\n"
                      "otherwise it could take hours instead of minutes to generate the ZIP file for your campaign.\n"
                      "You can separate the tab into its own window if you want to keep using your browser in the meantime.")
+        self.console.log("Generating ZIP file with ", size.toFixed(2), BYTES[div] + " of data")
+        self.console.setLabel1("Generating " + str(size.toFixed(2)) + BYTES[div] + " ZIP file (8/" + self.TOTAL_STEPS + ")")
+        self.console.setProgress1(7, self.TOTAL_STEPS)
 
         requestFileSystem = window.webkitRequestFileSystem or window.mozRequestFileSystem or window.requestFileSystem
 
@@ -156,20 +177,27 @@ class Campaign:
 
         # Create a tmp.zip file in temporary storage
         createTempFile(def (fileEntry):
-                           self._last_progress = -5
                            self._exportZip(zip, fileEntry,
                                            def ():
-                                               console.log("Congratulations! The Campaign.zip file was generated successfully.\nStarting download.")
+                                               self.console.warn("Congratulations! The Campaign.zip file was generated successfully.\nStarting download.")
+                                               self.console.setProgress1(self.TOTAL_STEPS, self.TOTAL_STEPS)
+                                               setTimeout(def(): self.console.hide();, 5000)
                                                fileEntry.file(def (f): window.saveAs(f, filename);)
                                            , def (current, total):
                                                percent = 100 * current / total
-                                               if percent - self._last_progress >= 5:
-                                                   console.log("Zip file generated : " + percent.toFixed(2) + " %")
-                                                   self._last_progress = (percent // 5) * 5
+                                               self.console.setProgress2(current, total)
+                                               self.console.setLabel2("Generating ZIP file (" + percent.toFixed(2) + "%)")
                                            , def (message):
-                                               console.log("Error creating zip file writer : ", message)
+                                               self.console.log("Error creating zip file writer : ", message)
                                            )
                        )
+    def _parseSides(self, sides):
+        result = []
+        side_list = sides.split("|")
+        for side in side_list:
+            if side != "":
+                result.append(window.decodeURIComponent(side))
+        return result
 
     def parsePage(self, page):
         data = page.toJSON()
@@ -179,6 +207,9 @@ class Campaign:
         data.paths = page.thepaths.toJSON() if page.thepaths? else []
         for path in data.paths:
             path.path = JSON.parse(path.path)
+        for graphic in data.graphics:
+            if graphic.sides?:
+                graphic.sides = self._parseSides(graphic.sides)
         return data
 
     def parsePages(self, pages):
@@ -196,14 +227,20 @@ class Campaign:
                         self.completedOperation(i)
                 page.fullyLoadPage()
                 setTimeout(makeCB(array, id, page), 1000)
-        console.log("Finished parsing pages.")
+        self.console.log("Finished parsing pages.")
         return array
 
     def updateModel(self, data, key, blob, id, cb):
         if key in ["bio", "gmnotes", "notes"]:
             data[key] = window.unescape(blob)
         elif key == "defaulttoken":
-            data[key] = JSON.parse(blob)
+            try:
+                data[key] = JSON.parse(blob)
+            except:
+                # Some one got invalid json data it seems
+                data[key] = {}
+            if data[key].sides?:
+                data[key].sides = self._parseSides(data[key].sides)
         else:
             data[key] = blob
         if self.completedOperation(id) and cb:
@@ -234,7 +271,7 @@ class Campaign:
         array = []
         for character in characters.models:
             array.append(self.parseCharacter(character, cb))
-        console.log("Finished parsing characters.")
+        self.console.log("Finished parsing characters.")
         return array
 
     def parseHandout(self, handout, cb):
@@ -255,7 +292,7 @@ class Campaign:
         array = []
         for handout in handouts.models:
             array.append(self.parseHandout(handout, cb))
-        console.log("Finished parsing handouts.")
+        self.console.log("Finished parsing handouts.")
         return array
 
     def parsePlayer(self, player):
@@ -274,7 +311,7 @@ class Campaign:
         array = []
         for player in players.models:
             array.append(self.parsePlayer(player))
-        console.log("Finished parsing players.")
+        self.console.log("Finished parsing players.")
         return array
 
     def loadArchivedPages(self):
@@ -297,7 +334,7 @@ class Campaign:
                     chat = window.atob(content[start:end])
                     obj.chat_archive = JSON.parse(chat)
                 except Exception as e:
-                    console.log("Unable to parse chat data: ", e)
+                    self.console.log("Unable to parse chat data: ", e)
                 break
                 
     def _fetchChatArchive(self, obj, done):
@@ -322,6 +359,8 @@ class Campaign:
                 cb(result)
         # Make sure we don't get callback called before we finish parsing all the items
         id = self.newPendingOperation()
+        self.console.setLabel1("Extracting Campaign data (2/" + self.TOTAL_STEPS + ")")
+        self.console.setProgress1(1, self.TOTAL_STEPS)
         result.handouts = self.parseHandouts(window.Campaign.handouts, done)
         result.characters = self.parseCharacters(window.Campaign.characters, done)
         result.pages = self.parsePages(window.Campaign.pages)
@@ -334,7 +373,10 @@ class Campaign:
             result.journalfolder = JSON.parse(result.journalfolder)
         if result.turnorder != "":
             result.turnorder = JSON.parse(result.turnorder)
-        console.log("Download operations in progress : ", self._pending_operations.length)
+        self.console.log("Download operations in progress : ", self._pending_operations.length)
+        self.console.setProgress2(0, self._pending_operations.length)
+        self.console.setLabel1("Downloading Resources (3/" + self.TOTAL_STEPS + ")")
+        self.console.setProgress1(2, self.TOTAL_STEPS)
         if self.completedOperation(id):
             done()
 
@@ -346,7 +388,20 @@ class Campaign:
         result.campaign_id = window.campaign_id
         self.campaign = result
 
-        console.log("Waiting ", num_loaded * 5, " seconds for ", num_loaded, " archived pages to finish loading")
+        self.console.log("Waiting ", num_loaded * 5, " seconds for ", num_loaded, " archived pages to finish loading")
+        self.console.setLabel1("Waiting for archived pages to finish loading (1/" + self.TOTAL_STEPS + ")")
+        self.console.setProgress1(0, self.TOTAL_STEPS)
+        if num_loaded > 0:
+            i = -1
+            updateProgress = def(): 
+                nonlocal i
+                i += 1
+                self.console.setLabel2("Waiting... " + (num_loaded * 5 - i) + "s")
+                self.console.setProgress2(i, num_loaded * 5)
+                if i < num_loaded * 5:
+                    setTimeout(updateProgress, 1000)
+            updateProgress()
+
         setTimeout(def(): self._parseCampaignDelayed(result, cb);, num_loaded * 5000)
         return result
 
@@ -419,7 +474,7 @@ class Campaign:
             self.downloadResource(new_url, self._makeAddBlobToZip(folder, prefix + ".png", finallyCB), errorCB)
         else:
             self.downloadImageViaCanvas(url, self._makeAddBlobToZip(folder, prefix + ".png", finallyCB), def ():
-                                            console.log("Couldn't download ", url, " with any alternative filename. Resource has become unavailable")
+                                            self.console.log("Couldn't download ", url, " with any alternative filename. Resource has become unavailable")
                                             finallyCB()
                                         )
             
@@ -446,8 +501,13 @@ class Campaign:
         self._addFileToZip(folder, "character.json", toBlob(character))
         if (character.avatar? "") != "":
             self.downloadR20Resource(folder, "avatar", character.avatar, finallyCB)
-        if character.defaulttoken? and (character.defaulttoken.imgsrc? "") != "":
-            self.downloadR20Resource(folder, "token", character.defaulttoken.imgsrc, finallyCB)
+        if character.defaulttoken?:
+            if (character.defaulttoken.imgsrc? "") != "":
+                self.downloadR20Resource(folder, "token", character.defaulttoken.imgsrc, finallyCB)
+            if character.defaulttoken.sides?:
+                for i, side in enumerate(character.defaulttoken.sides):
+                    self.downloadR20Resource(folder, "side_" + i, side, finallyCB)
+                
         if (character.bio? "") != "":
             self._addFileToZip(folder, "bio.html", new Blob([character.bio]))
         if (character.gmnotes? "") != "":
@@ -478,7 +538,7 @@ class Campaign:
                         char_dir = self._addZipFolder(folder, name)
                         self._addCharacterToZip(char_dir, character, finallyCB)
                     else:
-                        console.log("Can't find handout with ID : ", journal_entry)
+                        self.console.log("Can't find handout with ID : ", journal_entry)
                         continue
             else:
                 name = self._makeNameUnique(names, journal_entry.n)
@@ -508,12 +568,12 @@ class Campaign:
                         _makePostCB = def(folder, name, finallyCB, id):
                             return def(url):
                                 errorCB = def():
-                                    console.log("Couldn't download Jukebox audio from url : ", url)
+                                    self.console.log("Couldn't download Jukebox audio from url : ", url)
                                 self.completedOperation(id)
                                 self.downloadResource(url, self._makeAddBlobToZip(folder, name, finallyCB), errorCB)
                         _makePostErrorCB = def(track_id, finallyCB, id):
                             return def():
-                                console.log("Couldn't download Jukebox audio from Battlebards : ", track_id)
+                                self.console.log("Couldn't download Jukebox audio from Battlebards : ", track_id)
                                 self.completedOperation(id)
                                 finallyCB()
                         
@@ -521,14 +581,14 @@ class Campaign:
                             .fail(_makePostErrorCB(track.track_id, finallyCB, id))
                     else:
                         url = None
-                        console.log("Can't download Audio track (", track.title , "). Unsupported source : ", track.source)
+                        self.console.log("Can't download Audio track (", track.title , "). Unsupported source : ", track.source)
                     if url:
                         errorCB = def():
-                            console.log("Couldn't download Jukebox audio from url : ", url)
+                            self.console.log("Couldn't download Jukebox audio from url : ", url)
                             finallyCB()
                         self.downloadResource(url, self._makeAddBlobToZip(folder, name, finallyCB), errorCB)
                 else:
-                    console.log("Can't find Audio Track with ID : ", track)
+                    self.console.log("Can't find Audio Track with ID : ", track)
                     continue
             else:
                 name = self._makeNameUnique(names, audio.n)
@@ -543,9 +603,15 @@ class Campaign:
             graphics = self._addZipFolder(folder, "graphics")
             for graphic in page.graphics:
                 self.downloadR20Resource(graphics, graphic.id, graphic.imgsrc, finallyCB)
+                if graphic.sides?:
+                    for i, side in enumerate(graphic.sides):
+                        self.downloadR20Resource(graphics, graphic.id + "_side_" + i, side, finallyCB)
+                
 
     def _saveCampaignZipCharacters(self, checkZipDone):
-        console.log("Saving Characters")
+        self.console.log("Saving Characters")
+        self.console.setLabel1("Saving Characters (4/" + self.TOTAL_STEPS + ")")
+        self.console.setProgress1(3, self.TOTAL_STEPS)
         if self.campaign.characters.length > 0:
             characters = self._addZipFolder(self.zip, "characters")
             names = []
@@ -558,7 +624,9 @@ class Campaign:
         checkZipDone()
 
     def _saveCampaignZipJournal(self, checkZipDone):
-        console.log("Saving Journal")
+        self.console.log("Saving Journal")
+        self.console.setLabel1("Saving Journal handouts (5/" + self.TOTAL_STEPS + ")")
+        self.console.setProgress1(4, self.TOTAL_STEPS)
         if self.campaign.journalfolder.length > 0:
             journal = self._addZipFolder(self.zip, "journal")
             self._addJournalToZip(journal, self.campaign.journalfolder, checkZipDone)
@@ -583,11 +651,14 @@ class Campaign:
     def _saveCampaignZipPage(self, checkZipDone):
         if self.savingPageIdx >= self.campaign.pages.length:
             self.savingStep = 4
+            self.console.setPageLabel(None)
         else:
             page = self.campaign.pages[self.savingPageIdx]
-            self.savingPageIdx += 1
             name = page.name if len(page.name) > 0  else "Untitled"
-            console.log("Saving Page : ", name, "(", self.savingPageIdx, "/", self.campaign.pages.length, ")")
+            self.console.setPageProgress(self.savingPageIdx, self.campaign.pages.length)
+            self.savingPageIdx += 1
+            self.console.setPageLabel(name + " (" + str(self.savingPageIdx) + "/" + str(self.campaign.pages.length) + ")")
+            self.console.log("Saving Page : ", name, "(", self.savingPageIdx, "/", self.campaign.pages.length, ")")
             name = self._makeNameUnique(self.names, name)
             page_dir = self._addZipFolder(self.pages, name)
             self._addPageToZip(page_dir, page, checkZipDone)
@@ -595,7 +666,9 @@ class Campaign:
         checkZipDone()
 
     def _saveCampaignZipPages(self, checkZipDone):
-        console.log("Saving ", self.campaign.pages.length, " Pages")
+        self.console.log("Saving ", self.campaign.pages.length, " Pages")
+        self.console.setLabel1("Saving Pages (6/" + self.TOTAL_STEPS + ")")
+        self.console.setProgress1(5, self.TOTAL_STEPS)
         if self.campaign.pages.length > 0:
             self.pages = self._addZipFolder(self.zip, "pages")
             self.names = []
@@ -604,7 +677,9 @@ class Campaign:
         checkZipDone()
 
     def _saveCampaignZipJukebox(self, checkZipDone):
-        console.log("Saving Jukebox audio")
+        self.console.log("Saving Jukebox audio")
+        self.console.setLabel1("Saving Jukebox audio (7/" + self.TOTAL_STEPS + ")")
+        self.console.setProgress1(6, self.TOTAL_STEPS)
         if self.campaign.jukeboxfolder.length > 0:
             jukebox = self._addZipFolder(self.zip, "jukebox")
             self._addPlaylistToZip(jukebox, self.campaign.jukeboxfolder, checkZipDone)
@@ -614,7 +689,7 @@ class Campaign:
 
     def saveCampaignZip(self, filename=None):
         if self.zip is not None:
-            console.error("Saving already in progress. Can't be cancelled.")
+            self.console.error("Saving already in progress. Can't be cancelled.")
             return
         filename = filename if filename else (self.title + ".zip")
         self.zip = self._createZipFile()
@@ -625,7 +700,7 @@ class Campaign:
             self._addFileToZip(self.zip, 'chat_archive.json', toBlob(self.campaign.chat_archive))
         checkZipDone = def():
             if not self.hasPendingOperation():
-                #console.log("No more pending operations. Current step is ", self.savingStep)
+                #self.console.log("No more pending operations. Current step is ", self.savingStep)
                 if self.savingStep == 0:
                     self._saveCampaignZipCharacters(checkZipDone)
                 elif self.savingStep == 1:
@@ -639,15 +714,175 @@ class Campaign:
                 else:
                     self._saveZipToFile(self.zip, filename)
                     self.zip = None
-                console.log("Download operations in progress : ", self._pending_operations.length)
+                self.console.log("Download operations in progress : ", self._pending_operations.length)
+                self.console.setProgress2(0, self._pending_operations.length)
 
         checkZipDone()
 
     def exportCampaignZip(self, filename=None):
+        self.console.show()
         self.parseCampaign(def(campaign):self.saveCampaignZip(filename);)
 
+class ModalWindow:
+    def __init__(self, title="", modalClass="modal"):
+        self.title = title
+        modal_div = $("body ." + modalClass)
+        if modal_div.length > 0:
+            modal_div.remove()
+        self.modal_div = $('<div class="' + modalClass + '"><div class="' + modalClass + '-content"></div></div>')
+        css = """
+            /* The Modal (background) */
+            .modal {
+                display: none; /* Hidden by default */
+                position: fixed; /* Stay in place */
+                z-index: 9999; /* Sit on top */
+                padding-top: 100px; /* Location of the box */
+                left: 0;
+                top: 0;
+                width: 100%; /* Full width */
+                height: 100%; /* Full height */
+                overflow: auto; /* Enable scroll if needed */
+                background-color: rgb(0,0,0); /* Fallback color */
+                background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+                }
+            
+            /* Modal Content */
+            .modal-content {
+                background-color: #fefefe;
+                margin: auto;
+                padding: 20px;
+                border: 1px solid #888;
+                width: 80%;
+                height: 80%;
+                overflow: auto; /* Enable scroll if needed */
+            }
+            .modal-content .title {
+                position: relative;
+                top: -20px;
+                left: -50%;
+                width: 200%;
+                text-align: center;
+                border: 2px solid black;
+                margin: 5px;
+            }
+            .modal-content .log {
+                background-color: #ddd;
+            }
+            .modal-content .warn {
+                background-color: gold;
+                font-style: italic;
+            }
+        """.replace(/modal/g, modalClass)
+        $("body").append($("<style>" + css + "</style>"))
+        $("body").append(self.modal_div)
+        self.content = self.modal_div.find("." + modalClass + "-content")
+        self.main_progress = new ProgressBar()
+        self.mp_current = self.mp_total = 1
+        self.second_progress = new ProgressBar()
+        self.sp_current = self.sp_total = 1
+        self.page_progress = new ProgressBar()
+        self.pp_current = self.pp_total = 1
+        self.setPageLabel(None)
+        self.clear()
+        self.hide()
+
+    def clear(self):
+        self.content.html("")
+        self.content.append($('<div class="title">' + self.title + '</div>'))
+        self.content.append(self.main_progress.getElement())
+        self.content.append(self.page_progress.getElement())
+        self.content.append(self.second_progress.getElement())
+        self.content.append($('<div class="warn"></div>'))
+        self.content.append($('<details class="log"><summary>Log</summary></details>'))
+
+    def hide(self):
+        self.modal_div.css("display", "none")
+
+    def show(self):
+        self.modal_div.css("display", "block")
+
+    def append(self, content):
+        self.content.append($(content))
+
+    def log(self, *args):
+        console.log(*args)
+        line = ""
+        for a in args:
+            line += str(a) + " "
+        self.content.find(".log").append("<p>" + line.replace(/\n/g, "<br/>") + "</p>")
+
+    def warn(self, *args):
+        console.warn(*args)
+        line = ""
+        for a in args:
+            line += str(a) + " "
+        self.content.find(".warn").append($("<p>" + line.replace(/\n/g, "<br/>") + "</p"))
+
+    def setLabel1(self, label):
+        self.main_progress.setLabel(label)
+    def setLabel2(self, label):
+        self.second_progress.setLabel(label)
+    def setPageLabel(self, label):
+        if label:
+            self.page_progress.getElement().css("display", "block")
+            self.page_progress.setLabel(label)
+        else:
+            self.page_progress.getElement().css("display", "none")
+            self.setPageProgress(0, 1)
+    def setProgress1(self, current, total=None):
+        self.main_progress.setProgress(current, total)
+        self.mp_current = current
+        self.mp_total = total if total else self.main_progress.total
+    def setProgress2(self, current, total=None):
+        self.second_progress.setProgress(current, total)
+        self.sp_current = current
+        self.sp_total = self.second_progress.total
+        percent = self.sp_current / self.sp_total
+        if self.pp_total > 1:
+            self.page_progress.setProgress(self.pp_current + percent)
+            percent = self.pp_current / self.pp_total
+        self.main_progress.setProgress(self.mp_current + percent)
+    def setPageProgress(self, current, total=None):
+        self.page_progress.setProgress(current, total)
+        self.pp_current = current
+        self.pp_total = self.page_progress.total
+        percent = self.pp_current / self.pp_total
+        self.main_progress.setProgress(self.mp_current + percent)
+
+
+class ProgressBar:
+    def __init__(self, label="", current=0, total=100):
+        self.progress = $("""<div style="width: 100%; background-color: grey; margin: 5px">
+                               <span style="float: left; position: relative; left: 50%; line-height: 20px">
+                                  <strong style="float: left; position: relative; left: -50%"></strong>
+                               </span>
+                               <div style="background-color: dodgerblue; height: 20px;"></div>
+                             </div>""")
+        self.setLabel(label)
+        self.setProgress(current, total)
+
+    def setLabel(self, label):
+        self.progress.find("strong").html(label)
+
+    def setProgress(self, current, total=None):
+        if total:
+            self.total = total
+        self.current = current
+        percent = self.getPercent()
+        self.progress.find("div").css("width", str(percent.toFixed(2)) + "%")
+
+    def getPercent(self):
+        if self.total == 0:
+            percent = 100
+        else:
+            percent = self.current * 100 / self.total
+        return percent
+
+    def getElement(self):
+        return self.progress
+        
+
 console.log("Roll20 Campaign exporter loaded.")
-console.log("To export your Roll20 campaign, enter R20Exporter.exportCampaignZip() and be patient.")
-console.log("Note that you should not open a different campaign in Roll20 as it can interfere with the download of some resources.")
-console.log("DISCLAIMER: Please note that using this tool to export a module from the marketplace may infringe on the Marketplace Asset License and/or Roll20 EULA.")
+console.log("To export your Roll20 campaign, enter R20Exporter.exportCampaignZip() or click on the button in the Settings sidebar.")
 window.R20Exporter = new Campaign(window.$("head title").text().trim().replace(" | Roll20", ""))
+window.ProgressBar = ProgressBar

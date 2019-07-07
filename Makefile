@@ -3,7 +3,7 @@ JS_FILES=src/roll20_exporter.js dist/R20Exporter.js dist/R20Exporter_standalone.
 CONVERT_FLAGS=--restrict-movement --enable-fog --use-original-image-urls $(CONVERT_OPTIONS)
 
 %.js: %.pyj
-	rapydscript lint $< || true
+	rapydscript lint --globals '$$' --noqa eol-semicolon $<
 	rapydscript $(PYJ_FLAGS) $< --output $@
 
 
@@ -48,6 +48,18 @@ convert-lmop:
 convert-cos:
 	@rm -rf worlds/curse-of-strahd
 	./src/R20Converter.py $(CONVERT_FLAGS) worlds/curse-of-strahd "Curse of Strahd.zip"
+convert-cos-game:
+	@rm -rf worlds/curse-of-strahd
+	./src/R20Converter.py --restrict-movement --enable-fog --minimum-wall-length 50 --description "The Curse of Strahd.<br/>Will you be able to escape Barovia?" --door-color "#ff0000" --gm-password "ilovestrahd" --player-password "spareme" worlds/curse-of-strahd "Curse of Strahd.zip"
+convert-table:
+	@rm -rf worlds/table
+	./src/R20Converter.py $(CONVERT_FLAGS) --debug-page "Table" worlds/table "felix-table.zip"
+convert-fate:
+	@rm -rf worlds/fate
+	./src/R20Converter.py $(CONVERT_FLAGS) worlds/fate "Fate_OrbisPhantasia.zip"
+convert-butcher:
+	@rm -rf worlds/butcher
+	./src/R20Converter.py $(CONVERT_FLAGS) worlds/butcher "ButcherBlaviken.zip"
 
 $(JS_FILES): $(PYJ_DEPS)
 

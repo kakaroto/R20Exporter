@@ -4093,11 +4093,23 @@ var str = ρσ_str, repr = ρσ_repr;;
         }
         Campaign.prototype.__init__ = function __init__(title) {
             var self = this;
+            var button, content;
             self.title = title;
             self.campaign = {};
             self.zip = null;
             self._pending_operations = ρσ_list_decorate([]);
             self._total_size = 0;
+            self.console = new ModalWindow("Exporting Campaign to ZIP file", "r20exporter-modal");
+            self.console.warn("Note that you should not open a different campaign in Roll20 as it can interfere with the download of some resources.");
+            self.console.warn("<strong>DISCLAIMER: Please note that using this tool to export a module from the marketplace may infringe on the Marketplace Asset License and/or Roll20 EULA.</strong>");
+            $("#r20exporter").remove();
+            button = $("<a class=\"btn\" id=\"r20exporter\">Export Campaign to ZIP</a>");
+            content = $("#mysettings .content");
+            content.prepend(button);
+            button.css("width", "calc(100% - " + content.css("padding-right") + " - " + content.css("padding-left") + ")");
+            button.on("click", function () {
+                self.exportCampaignZip();
+            });
         };
         if (!Campaign.prototype.__init__.__argnames__) Object.defineProperties(Campaign.prototype.__init__, {
             __argnames__ : {value: ["title"]}
@@ -4109,6 +4121,7 @@ var str = ρσ_str, repr = ρσ_repr;;
             var id;
             id = str(uuid.uuid4());
             self._pending_operations.append(id);
+            self._updateSecondProgress();
             return id;
         };
         Campaign.prototype.hasPendingOperation = function hasPendingOperation() {
@@ -4117,7 +4130,6 @@ var str = ρσ_str, repr = ρσ_repr;;
         };
         Campaign.prototype.completedOperation = function completedOperation(id) {
             var self = this;
-            var left, display;
             try {
                 self._pending_operations.remove(id);
             } catch (ρσ_Exception) {
@@ -4125,11 +4137,7 @@ var str = ρσ_str, repr = ρσ_repr;;
                 {
                 } 
             }
-            left = self._pending_operations.length;
-            display = left > 100 && ρσ_equals(left % 100, 0) || left < 100 && ρσ_equals(left % 10, 0);
-            if (display) {
-                console.log("Download operations still in progress : ", left);
-            }
+            self._updateSecondProgress();
             return !self.hasPendingOperation();
         };
         if (!Campaign.prototype.completedOperation.__argnames__) Object.defineProperties(Campaign.prototype.completedOperation, {
@@ -4138,6 +4146,21 @@ var str = ρσ_str, repr = ρσ_repr;;
         Campaign.prototype.clearPendingOperations = function clearPendingOperations() {
             var self = this;
             self._pending_operations = ρσ_list_decorate([]);
+            self._updateSecondProgress();
+        };
+        Campaign.prototype._updateSecondProgress = function _updateSecondProgress() {
+            var self = this;
+            var left, total;
+            left = self._pending_operations.length;
+            self.console.setLabel2(str(left) + " operations in progress");
+            total = self.console.second_progress.total;
+            if (left > total) {
+                total = left;
+            }
+            if ((left === 0 || typeof left === "object" && ρσ_equals(left, 0))) {
+                left = total = 1;
+            }
+            self.console.setProgress2(total - left, total);
         };
         Campaign.prototype.findID = function findID() {
             var self = this;
@@ -4326,9 +4349,11 @@ var str = ρσ_str, repr = ρσ_repr;;
                 size /= 1024;
                 div += 1;
             }
-            console.log("Done downloading resources!");
-            console.log("Generating ZIP file with ", size.toFixed(2), BYTES[(typeof div === "number" && div < 0) ? BYTES.length + div : div] + " of data");
-            console.warn("It is highly recommended to keep this tab focused and the window non-minimized during the entire process\notherwise it could take hours instead of minutes to generate the ZIP file for your campaign.\nYou can separate the tab into its own window if you want to keep using your browser in the meantime.");
+            self.console.warn("Done downloading resources!");
+            self.console.warn("It is highly recommended to keep this tab focused and the window non-minimized during the entire process\notherwise it could take hours instead of minutes to generate the ZIP file for your campaign.\nYou can separate the tab into its own window if you want to keep using your browser in the meantime.");
+            self.console.log("Generating ZIP file with ", size.toFixed(2), BYTES[(typeof div === "number" && div < 0) ? BYTES.length + div : div] + " of data");
+            self.console.setLabel1("Generating " + str(size.toFixed(2)) + BYTES[(typeof div === "number" && div < 0) ? BYTES.length + div : div] + " ZIP file (8/" + self.TOTAL_STEPS + ")");
+            self.console.setProgress1(7, self.TOTAL_STEPS);
             requestFileSystem = window.webkitRequestFileSystem || window.mozRequestFileSystem || window.requestFileSystem;
             createTempFile = (function() {
                 var ρσ_anonfunc = function (tempCB) {
@@ -4375,9 +4400,12 @@ var str = ρσ_str, repr = ρσ_repr;;
             })();
             createTempFile((function() {
                 var ρσ_anonfunc = function (fileEntry) {
-                    self._last_progress = -5;
                     self._exportZip(zip, fileEntry, function () {
-                        console.log("Congratulations! The Campaign.zip file was generated successfully.\nStarting download.");
+                        self.console.warn("Congratulations! The Campaign.zip file was generated successfully.\nStarting download.");
+                        self.console.setProgress1(self.TOTAL_STEPS, self.TOTAL_STEPS);
+                        setTimeout(function () {
+                            self.console.hide();
+                        }, 5e3);
                         fileEntry.file((function() {
                             var ρσ_anonfunc = function (f) {
                                 window.saveAs(f, filename);
@@ -4391,10 +4419,8 @@ var str = ρσ_str, repr = ρσ_repr;;
                         var ρσ_anonfunc = function (current, total) {
                             var percent;
                             percent = 100 * current / total;
-                            if (percent - self._last_progress >= 5) {
-                                console.log("Zip file generated : " + percent.toFixed(2) + " %");
-                                self._last_progress = Math.floor(percent / 5) * 5;
-                            }
+                            self.console.setProgress2(current, total);
+                            self.console.setLabel2("Generating ZIP file (" + percent.toFixed(2) + "%)");
                         };
                         if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
                             __argnames__ : {value: ["current", "total"]}
@@ -4402,7 +4428,7 @@ var str = ρσ_str, repr = ρσ_repr;;
                         return ρσ_anonfunc;
                     })(), (function() {
                         var ρσ_anonfunc = function (message) {
-                            console.log("Error creating zip file writer : ", message);
+                            self.console.log("Error creating zip file writer : ", message);
                         };
                         if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
                             __argnames__ : {value: ["message"]}
@@ -4419,18 +4445,42 @@ var str = ρσ_str, repr = ρσ_repr;;
         if (!Campaign.prototype._saveZipToFile.__argnames__) Object.defineProperties(Campaign.prototype._saveZipToFile, {
             __argnames__ : {value: ["zip", "filename"]}
         });
+        Campaign.prototype._parseSides = function _parseSides(sides) {
+            var self = this;
+            var result, side_list, side;
+            result = ρσ_list_decorate([]);
+            side_list = sides.split("|");
+            var ρσ_Iter1 = ρσ_Iterable(side_list);
+            for (var ρσ_Index1 = 0; ρσ_Index1 < ρσ_Iter1.length; ρσ_Index1++) {
+                side = ρσ_Iter1[ρσ_Index1];
+                if ((side !== "" && (typeof side !== "object" || ρσ_not_equals(side, "")))) {
+                    result.append(window.decodeURIComponent(side));
+                }
+            }
+            return result;
+        };
+        if (!Campaign.prototype._parseSides.__argnames__) Object.defineProperties(Campaign.prototype._parseSides, {
+            __argnames__ : {value: ["sides"]}
+        });
         Campaign.prototype.parsePage = function parsePage(page) {
             var self = this;
-            var data, path;
+            var data, path, graphic;
             data = page.toJSON();
             data.zorder = data.zorder.split(",");
             data.graphics = (ρσ_exists.n(page.thegraphics)) ? page.thegraphics.toJSON() : ρσ_list_decorate([]);
             data.texts = (ρσ_exists.n(page.thetexts)) ? page.thetexts.toJSON() : ρσ_list_decorate([]);
             data.paths = (ρσ_exists.n(page.thepaths)) ? page.thepaths.toJSON() : ρσ_list_decorate([]);
-            var ρσ_Iter1 = ρσ_Iterable(data.paths);
-            for (var ρσ_Index1 = 0; ρσ_Index1 < ρσ_Iter1.length; ρσ_Index1++) {
-                path = ρσ_Iter1[ρσ_Index1];
+            var ρσ_Iter2 = ρσ_Iterable(data.paths);
+            for (var ρσ_Index2 = 0; ρσ_Index2 < ρσ_Iter2.length; ρσ_Index2++) {
+                path = ρσ_Iter2[ρσ_Index2];
                 path.path = JSON.parse(path.path);
+            }
+            var ρσ_Iter3 = ρσ_Iterable(data.graphics);
+            for (var ρσ_Index3 = 0; ρσ_Index3 < ρσ_Iter3.length; ρσ_Index3++) {
+                graphic = ρσ_Iter3[ρσ_Index3];
+                if (ρσ_exists.n(graphic.sides)) {
+                    graphic.sides = self._parseSides(graphic.sides);
+                }
             }
             return data;
         };
@@ -4441,9 +4491,9 @@ var str = ρσ_str, repr = ρσ_repr;;
             var self = this;
             var array, id, makeCB, page;
             array = ρσ_list_decorate([]);
-            var ρσ_Iter2 = ρσ_Iterable(pages.models);
-            for (var ρσ_Index2 = 0; ρσ_Index2 < ρσ_Iter2.length; ρσ_Index2++) {
-                page = ρσ_Iter2[ρσ_Index2];
+            var ρσ_Iter4 = ρσ_Iterable(pages.models);
+            for (var ρσ_Index4 = 0; ρσ_Index4 < ρσ_Iter4.length; ρσ_Index4++) {
+                page = ρσ_Iter4[ρσ_Index4];
                 if (page.fullyLoaded) {
                     array.append(self.parsePage(page));
                 } else {
@@ -4464,7 +4514,7 @@ var str = ρσ_str, repr = ρσ_repr;;
                     setTimeout(makeCB(array, id, page), 1e3);
                 }
             }
-            console.log("Finished parsing pages.");
+            self.console.log("Finished parsing pages.");
             return array;
         };
         if (!Campaign.prototype.parsePages.__argnames__) Object.defineProperties(Campaign.prototype.parsePages, {
@@ -4475,7 +4525,17 @@ var str = ρσ_str, repr = ρσ_repr;;
             if (ρσ_in(key, ρσ_list_decorate([ "bio", "gmnotes", "notes" ]))) {
                 data[(typeof key === "number" && key < 0) ? data.length + key : key] = window.unescape(blob);
             } else if ((key === "defaulttoken" || typeof key === "object" && ρσ_equals(key, "defaulttoken"))) {
-                data[(typeof key === "number" && key < 0) ? data.length + key : key] = JSON.parse(blob);
+                try {
+                    data[(typeof key === "number" && key < 0) ? data.length + key : key] = JSON.parse(blob);
+                } catch (ρσ_Exception) {
+                    ρσ_last_exception = ρσ_Exception;
+                    {
+                        data[(typeof key === "number" && key < 0) ? data.length + key : key] = {};
+                    } 
+                }
+                if (ρσ_exists.n(data[(typeof key === "number" && key < 0) ? data.length + key : key].sides)) {
+                    data[(typeof key === "number" && key < 0) ? data.length + key : key].sides = self._parseSides(data[(typeof key === "number" && key < 0) ? data.length + key : key].sides);
+                }
             } else {
                 data[(typeof key === "number" && key < 0) ? data.length + key : key] = blob;
             }
@@ -4542,12 +4602,12 @@ var str = ρσ_str, repr = ρσ_repr;;
             var self = this;
             var array, character;
             array = ρσ_list_decorate([]);
-            var ρσ_Iter3 = ρσ_Iterable(characters.models);
-            for (var ρσ_Index3 = 0; ρσ_Index3 < ρσ_Iter3.length; ρσ_Index3++) {
-                character = ρσ_Iter3[ρσ_Index3];
+            var ρσ_Iter5 = ρσ_Iterable(characters.models);
+            for (var ρσ_Index5 = 0; ρσ_Index5 < ρσ_Iter5.length; ρσ_Index5++) {
+                character = ρσ_Iter5[ρσ_Index5];
                 array.append(self.parseCharacter(character, cb));
             }
-            console.log("Finished parsing characters.");
+            self.console.log("Finished parsing characters.");
             return array;
         };
         if (!Campaign.prototype.parseCharacters.__argnames__) Object.defineProperties(Campaign.prototype.parseCharacters, {
@@ -4594,12 +4654,12 @@ var str = ρσ_str, repr = ρσ_repr;;
             var self = this;
             var array, handout;
             array = ρσ_list_decorate([]);
-            var ρσ_Iter4 = ρσ_Iterable(handouts.models);
-            for (var ρσ_Index4 = 0; ρσ_Index4 < ρσ_Iter4.length; ρσ_Index4++) {
-                handout = ρσ_Iter4[ρσ_Index4];
+            var ρσ_Iter6 = ρσ_Iterable(handouts.models);
+            for (var ρσ_Index6 = 0; ρσ_Index6 < ρσ_Iter6.length; ρσ_Index6++) {
+                handout = ρσ_Iter6[ρσ_Index6];
                 array.append(self.parseHandout(handout, cb));
             }
-            console.log("Finished parsing handouts.");
+            self.console.log("Finished parsing handouts.");
             return array;
         };
         if (!Campaign.prototype.parseHandouts.__argnames__) Object.defineProperties(Campaign.prototype.parseHandouts, {
@@ -4630,12 +4690,12 @@ var str = ρσ_str, repr = ρσ_repr;;
             var self = this;
             var array, player;
             array = ρσ_list_decorate([]);
-            var ρσ_Iter5 = ρσ_Iterable(players.models);
-            for (var ρσ_Index5 = 0; ρσ_Index5 < ρσ_Iter5.length; ρσ_Index5++) {
-                player = ρσ_Iter5[ρσ_Index5];
+            var ρσ_Iter7 = ρσ_Iterable(players.models);
+            for (var ρσ_Index7 = 0; ρσ_Index7 < ρσ_Iter7.length; ρσ_Index7++) {
+                player = ρσ_Iter7[ρσ_Index7];
                 array.append(self.parsePlayer(player));
             }
-            console.log("Finished parsing players.");
+            self.console.log("Finished parsing players.");
             return array;
         };
         if (!Campaign.prototype.parsePlayers.__argnames__) Object.defineProperties(Campaign.prototype.parsePlayers, {
@@ -4645,9 +4705,9 @@ var str = ρσ_str, repr = ρσ_repr;;
             var self = this;
             var num_loaded, page;
             num_loaded = 0;
-            var ρσ_Iter6 = ρσ_Iterable(window.Campaign.pages.models);
-            for (var ρσ_Index6 = 0; ρσ_Index6 < ρσ_Iter6.length; ρσ_Index6++) {
-                page = ρσ_Iter6[ρσ_Index6];
+            var ρσ_Iter8 = ρσ_Iterable(window.Campaign.pages.models);
+            for (var ρσ_Index8 = 0; ρσ_Index8 < ρσ_Iter8.length; ρσ_Index8++) {
+                page = ρσ_Iter8[ρσ_Index8];
                 if (!page.fullyLoaded) {
                     page.fullyLoadPage();
                     num_loaded += 1;
@@ -4660,8 +4720,8 @@ var str = ρσ_str, repr = ρσ_repr;;
             var scripts, prefix, content, start, end, chat, i;
             scripts = window.$(html).filter("script[type='text/javascript']");
             prefix = "var msgdata = \"";
-            for (var ρσ_Index7 = 0; ρσ_Index7 < scripts.length; ρσ_Index7++) {
-                i = ρσ_Index7;
+            for (var ρσ_Index9 = 0; ρσ_Index9 < scripts.length; ρσ_Index9++) {
+                i = ρσ_Index9;
                 content = scripts[(typeof i === "number" && i < 0) ? scripts.length + i : i].textContent.trim();
                 if (content.startsWith(prefix)) {
                     start = len(prefix);
@@ -4673,7 +4733,7 @@ var str = ρσ_str, repr = ρσ_repr;;
                         ρσ_last_exception = ρσ_Exception;
                         if (ρσ_Exception instanceof Error) {
                             var e = ρσ_Exception;
-                            console.log("Unable to parse chat data: ", e);
+                            self.console.log("Unable to parse chat data: ", e);
                         } else {
                             throw ρσ_Exception;
                         }
@@ -4727,6 +4787,8 @@ var str = ρσ_str, repr = ρσ_repr;;
                 }
             };
             id = self.newPendingOperation();
+            self.console.setLabel1("Extracting Campaign data (2/" + self.TOTAL_STEPS + ")");
+            self.console.setProgress1(1, self.TOTAL_STEPS);
             result.handouts = self.parseHandouts(window.Campaign.handouts, done);
             result.characters = self.parseCharacters(window.Campaign.characters, done);
             result.pages = self.parsePages(window.Campaign.pages);
@@ -4742,7 +4804,10 @@ var str = ρσ_str, repr = ρσ_repr;;
             if ((result.turnorder !== "" && (typeof result.turnorder !== "object" || ρσ_not_equals(result.turnorder, "")))) {
                 result.turnorder = JSON.parse(result.turnorder);
             }
-            console.log("Download operations in progress : ", self._pending_operations.length);
+            self.console.log("Download operations in progress : ", self._pending_operations.length);
+            self.console.setProgress2(0, self._pending_operations.length);
+            self.console.setLabel1("Downloading Resources (3/" + self.TOTAL_STEPS + ")");
+            self.console.setProgress1(2, self.TOTAL_STEPS);
             if (self.completedOperation(id)) {
                 done();
             }
@@ -4752,14 +4817,28 @@ var str = ρσ_str, repr = ρσ_repr;;
         });
         Campaign.prototype.parseCampaign = function parseCampaign(cb) {
             var self = this;
-            var num_loaded, result;
+            var num_loaded, result, i, updateProgress;
             num_loaded = self.loadArchivedPages();
             result = window.Campaign.toJSON();
             result.campaign_title = self.title;
             result.account_id = window.d20_account_id;
             result.campaign_id = window.campaign_id;
             self.campaign = result;
-            console.log("Waiting ", num_loaded * 5, " seconds for ", num_loaded, " archived pages to finish loading");
+            self.console.log("Waiting ", num_loaded * 5, " seconds for ", num_loaded, " archived pages to finish loading");
+            self.console.setLabel1("Waiting for archived pages to finish loading (1/" + self.TOTAL_STEPS + ")");
+            self.console.setProgress1(0, self.TOTAL_STEPS);
+            if (num_loaded > 0) {
+                i = -1;
+                updateProgress = function () {
+                    i += 1;
+                    self.console.setLabel2("Waiting... " + (num_loaded * 5 - i) + "s");
+                    self.console.setProgress2(i, num_loaded * 5);
+                    if (i < num_loaded * 5) {
+                        setTimeout(updateProgress, 1e3);
+                    }
+                };
+                updateProgress();
+            }
             setTimeout(function () {
                 self._parseCampaignDelayed(result, cb);
             }, num_loaded * 5e3);
@@ -4948,7 +5027,7 @@ var str = ρσ_str, repr = ρσ_repr;;
                 self.downloadResource(new_url, self._makeAddBlobToZip(folder, prefix + ".png", finallyCB), errorCB);
             } else {
                 self.downloadImageViaCanvas(url, self._makeAddBlobToZip(folder, prefix + ".png", finallyCB), function () {
-                    console.log("Couldn't download ", url, " with any alternative filename. Resource has become unavailable");
+                    self.console.log("Couldn't download ", url, " with any alternative filename. Resource has become unavailable");
                     finallyCB();
                 });
             }
@@ -4978,9 +5057,9 @@ var str = ρσ_str, repr = ρσ_repr;;
                 _list = ρσ_kwargs_obj._list;
             }
             var entry;
-            var ρσ_Iter8 = ρσ_Iterable(journal);
-            for (var ρσ_Index8 = 0; ρσ_Index8 < ρσ_Iter8.length; ρσ_Index8++) {
-                entry = ρσ_Iter8[ρσ_Index8];
+            var ρσ_Iter10 = ρσ_Iterable(journal);
+            for (var ρσ_Index10 = 0; ρσ_Index10 < ρσ_Iter10.length; ρσ_Index10++) {
+                entry = ρσ_Iter10[ρσ_Index10];
                 if ((typeof entry === "string" || typeof typeof entry === "object" && ρσ_equals(typeof entry, "string"))) {
                     _list.append(entry);
                 } else {
@@ -5012,12 +5091,24 @@ var str = ρσ_str, repr = ρσ_repr;;
         });
         Campaign.prototype._addCharacterToZip = function _addCharacterToZip(folder, character, finallyCB) {
             var self = this;
+            var ρσ_unpack, i, side;
             self._addFileToZip(folder, "character.json", toBlob(character));
             if ((ρσ_exists.e(character.avatar, "") !== "" && (typeof ρσ_exists.e(character.avatar, "") !== "object" || ρσ_not_equals(ρσ_exists.e(character.avatar, ""), "")))) {
                 self.downloadR20Resource(folder, "avatar", character.avatar, finallyCB);
             }
-            if (ρσ_exists.n(character.defaulttoken) && (ρσ_exists.e(character.defaulttoken.imgsrc, "") !== "" && (typeof ρσ_exists.e(character.defaulttoken.imgsrc, "") !== "object" || ρσ_not_equals(ρσ_exists.e(character.defaulttoken.imgsrc, ""), "")))) {
-                self.downloadR20Resource(folder, "token", character.defaulttoken.imgsrc, finallyCB);
+            if (ρσ_exists.n(character.defaulttoken)) {
+                if ((ρσ_exists.e(character.defaulttoken.imgsrc, "") !== "" && (typeof ρσ_exists.e(character.defaulttoken.imgsrc, "") !== "object" || ρσ_not_equals(ρσ_exists.e(character.defaulttoken.imgsrc, ""), "")))) {
+                    self.downloadR20Resource(folder, "token", character.defaulttoken.imgsrc, finallyCB);
+                }
+                if (ρσ_exists.n(character.defaulttoken.sides)) {
+                    var ρσ_Iter11 = ρσ_Iterable(enumerate(character.defaulttoken.sides));
+                    for (var ρσ_Index11 = 0; ρσ_Index11 < ρσ_Iter11.length; ρσ_Index11++) {
+                        ρσ_unpack = ρσ_Iter11[ρσ_Index11];
+                        i = ρσ_unpack[0];
+                        side = ρσ_unpack[1];
+                        self.downloadR20Resource(folder, "side_" + i, side, finallyCB);
+                    }
+                }
             }
             if ((ρσ_exists.e(character.bio, "") !== "" && (typeof ρσ_exists.e(character.bio, "") !== "object" || ρσ_not_equals(ρσ_exists.e(character.bio, ""), "")))) {
                 self._addFileToZip(folder, "bio.html", new Blob(ρσ_list_decorate([ character.bio ])));
@@ -5049,9 +5140,9 @@ var str = ρσ_str, repr = ρσ_repr;;
             var self = this;
             var names, handout, name, handout_dir, character, char_dir, child_dir, journal_entry;
             names = ρσ_list_decorate([]);
-            var ρσ_Iter9 = ρσ_Iterable(journal);
-            for (var ρσ_Index9 = 0; ρσ_Index9 < ρσ_Iter9.length; ρσ_Index9++) {
-                journal_entry = ρσ_Iter9[ρσ_Index9];
+            var ρσ_Iter12 = ρσ_Iterable(journal);
+            for (var ρσ_Index12 = 0; ρσ_Index12 < ρσ_Iter12.length; ρσ_Index12++) {
+                journal_entry = ρσ_Iter12[ρσ_Index12];
                 if ((typeof journal_entry === "string" || typeof typeof journal_entry === "object" && ρσ_equals(typeof journal_entry, "string"))) {
                     handout = self.findID(journal_entry, "handout");
                     if (handout !== null) {
@@ -5065,7 +5156,7 @@ var str = ρσ_str, repr = ρσ_repr;;
                             char_dir = self._addZipFolder(folder, name);
                             self._addCharacterToZip(char_dir, character, finallyCB);
                         } else {
-                            console.log("Can't find handout with ID : ", journal_entry);
+                            self.console.log("Can't find handout with ID : ", journal_entry);
                             continue;
                         }
                     }
@@ -5083,9 +5174,9 @@ var str = ρσ_str, repr = ρσ_repr;;
             var self = this;
             var names, track, name, url, filename, id, _makePostCB, _makePostErrorCB, errorCB, child_dir, audio;
             names = ρσ_list_decorate([]);
-            var ρσ_Iter10 = ρσ_Iterable(playlist);
-            for (var ρσ_Index10 = 0; ρσ_Index10 < ρσ_Iter10.length; ρσ_Index10++) {
-                audio = ρσ_Iter10[ρσ_Index10];
+            var ρσ_Iter13 = ρσ_Iterable(playlist);
+            for (var ρσ_Index13 = 0; ρσ_Index13 < ρσ_Iter13.length; ρσ_Index13++) {
+                audio = ρσ_Iter13[ρσ_Index13];
                 if ((typeof audio === "string" || typeof typeof audio === "object" && ρσ_equals(typeof audio, "string"))) {
                     track = self.findID(audio, "track");
                     if (track !== null) {
@@ -5110,7 +5201,7 @@ var str = ρσ_str, repr = ρσ_repr;;
                                         var ρσ_anonfunc = function (url) {
                                             var errorCB;
                                             errorCB = function () {
-                                                console.log("Couldn't download Jukebox audio from url : ", url);
+                                                self.console.log("Couldn't download Jukebox audio from url : ", url);
                                             };
                                             self.completedOperation(id);
                                             self.downloadResource(url, self._makeAddBlobToZip(folder, name, finallyCB), errorCB);
@@ -5129,7 +5220,7 @@ var str = ρσ_str, repr = ρσ_repr;;
                             _makePostErrorCB = (function() {
                                 var ρσ_anonfunc = function (track_id, finallyCB, id) {
                                     return function () {
-                                        console.log("Couldn't download Jukebox audio from Battlebards : ", track_id);
+                                        self.console.log("Couldn't download Jukebox audio from Battlebards : ", track_id);
                                         self.completedOperation(id);
                                         finallyCB();
                                     };
@@ -5146,17 +5237,17 @@ var str = ρσ_str, repr = ρσ_repr;;
                             }).call(this), _makePostCB(folder, name, finallyCB, id)).fail(_makePostErrorCB(track.track_id, finallyCB, id));
                         } else {
                             url = null;
-                            console.log("Can't download Audio track (", track.title, "). Unsupported source : ", track.source);
+                            self.console.log("Can't download Audio track (", track.title, "). Unsupported source : ", track.source);
                         }
                         if (url) {
                             errorCB = function () {
-                                console.log("Couldn't download Jukebox audio from url : ", url);
+                                self.console.log("Couldn't download Jukebox audio from url : ", url);
                                 finallyCB();
                             };
                             self.downloadResource(url, self._makeAddBlobToZip(folder, name, finallyCB), errorCB);
                         }
                     } else {
-                        console.log("Can't find Audio Track with ID : ", track);
+                        self.console.log("Can't find Audio Track with ID : ", track);
                         continue;
                     }
                 } else {
@@ -5171,17 +5262,26 @@ var str = ρσ_str, repr = ρσ_repr;;
         });
         Campaign.prototype._addPageToZip = function _addPageToZip(folder, page, finallyCB) {
             var self = this;
-            var graphics, graphic;
+            var graphics, ρσ_unpack, i, side, graphic;
             self._addFileToZip(folder, "page.json", toBlob(page));
             if ((ρσ_exists.e(page.thumbnail, "") !== "" && (typeof ρσ_exists.e(page.thumbnail, "") !== "object" || ρσ_not_equals(ρσ_exists.e(page.thumbnail, ""), "")))) {
                 self.downloadR20Resource(folder, "thumbnail", page.thumbnail, finallyCB);
             }
             if (page.graphics.length > 0) {
                 graphics = self._addZipFolder(folder, "graphics");
-                var ρσ_Iter11 = ρσ_Iterable(page.graphics);
-                for (var ρσ_Index11 = 0; ρσ_Index11 < ρσ_Iter11.length; ρσ_Index11++) {
-                    graphic = ρσ_Iter11[ρσ_Index11];
+                var ρσ_Iter14 = ρσ_Iterable(page.graphics);
+                for (var ρσ_Index14 = 0; ρσ_Index14 < ρσ_Iter14.length; ρσ_Index14++) {
+                    graphic = ρσ_Iter14[ρσ_Index14];
                     self.downloadR20Resource(graphics, graphic.id, graphic.imgsrc, finallyCB);
+                    if (ρσ_exists.n(graphic.sides)) {
+                        var ρσ_Iter15 = ρσ_Iterable(enumerate(graphic.sides));
+                        for (var ρσ_Index15 = 0; ρσ_Index15 < ρσ_Iter15.length; ρσ_Index15++) {
+                            ρσ_unpack = ρσ_Iter15[ρσ_Index15];
+                            i = ρσ_unpack[0];
+                            side = ρσ_unpack[1];
+                            self.downloadR20Resource(graphics, graphic.id + "_side_" + i, side, finallyCB);
+                        }
+                    }
                 }
             }
         };
@@ -5191,13 +5291,15 @@ var str = ρσ_str, repr = ρσ_repr;;
         Campaign.prototype._saveCampaignZipCharacters = function _saveCampaignZipCharacters(checkZipDone) {
             var self = this;
             var characters, names, name, char_dir, character;
-            console.log("Saving Characters");
+            self.console.log("Saving Characters");
+            self.console.setLabel1("Saving Characters (4/" + self.TOTAL_STEPS + ")");
+            self.console.setProgress1(3, self.TOTAL_STEPS);
             if (self.campaign.characters.length > 0) {
                 characters = self._addZipFolder(self.zip, "characters");
                 names = ρσ_list_decorate([]);
-                var ρσ_Iter12 = ρσ_Iterable(self.campaign.characters);
-                for (var ρσ_Index12 = 0; ρσ_Index12 < ρσ_Iter12.length; ρσ_Index12++) {
-                    character = ρσ_Iter12[ρσ_Index12];
+                var ρσ_Iter16 = ρσ_Iterable(self.campaign.characters);
+                for (var ρσ_Index16 = 0; ρσ_Index16 < ρσ_Iter16.length; ρσ_Index16++) {
+                    character = ρσ_Iter16[ρσ_Index16];
                     name = self._makeNameUnique(names, character.name);
                     char_dir = self._addZipFolder(characters, name);
                     self._addCharacterToZip(char_dir, character, checkZipDone);
@@ -5212,16 +5314,18 @@ var str = ρσ_str, repr = ρσ_repr;;
         Campaign.prototype._saveCampaignZipJournal = function _saveCampaignZipJournal(checkZipDone) {
             var self = this;
             var journal, all_ids, orphaned, archived, handout, folder;
-            console.log("Saving Journal");
+            self.console.log("Saving Journal");
+            self.console.setLabel1("Saving Journal handouts (5/" + self.TOTAL_STEPS + ")");
+            self.console.setProgress1(4, self.TOTAL_STEPS);
             if (self.campaign.journalfolder.length > 0) {
                 journal = self._addZipFolder(self.zip, "journal");
                 self._addJournalToZip(journal, self.campaign.journalfolder, checkZipDone);
                 all_ids = self._flattenJournalEntries(self.campaign.journalfolder);
                 orphaned = ρσ_list_decorate([]);
                 archived = ρσ_list_decorate([]);
-                var ρσ_Iter13 = ρσ_Iterable(self.campaign.handouts);
-                for (var ρσ_Index13 = 0; ρσ_Index13 < ρσ_Iter13.length; ρσ_Index13++) {
-                    handout = ρσ_Iter13[ρσ_Index13];
+                var ρσ_Iter17 = ρσ_Iterable(self.campaign.handouts);
+                for (var ρσ_Index17 = 0; ρσ_Index17 < ρσ_Iter17.length; ρσ_Index17++) {
+                    handout = ρσ_Iter17[ρσ_Index17];
                     if (!ρσ_in(handout.id, all_ids)) {
                         orphaned.append(handout.id);
                     } else if (handout.archived) {
@@ -5248,11 +5352,14 @@ var str = ρσ_str, repr = ρσ_repr;;
             var page, name, page_dir;
             if (self.savingPageIdx >= self.campaign.pages.length) {
                 self.savingStep = 4;
+                self.console.setPageLabel(null);
             } else {
                 page = (ρσ_expr_temp = self.campaign.pages)[ρσ_bound_index(self.savingPageIdx, ρσ_expr_temp)];
-                self.savingPageIdx += 1;
                 name = (len(page.name) > 0) ? page.name : "Untitled";
-                console.log("Saving Page : ", name, "(", self.savingPageIdx, "/", self.campaign.pages.length, ")");
+                self.console.setPageProgress(self.savingPageIdx, self.campaign.pages.length);
+                self.savingPageIdx += 1;
+                self.console.setPageLabel(name + " (" + str(self.savingPageIdx) + "/" + str(self.campaign.pages.length) + ")");
+                self.console.log("Saving Page : ", name, "(", self.savingPageIdx, "/", self.campaign.pages.length, ")");
                 name = self._makeNameUnique(self.names, name);
                 page_dir = self._addZipFolder(self.pages, name);
                 self._addPageToZip(page_dir, page, checkZipDone);
@@ -5264,7 +5371,9 @@ var str = ρσ_str, repr = ρσ_repr;;
         });
         Campaign.prototype._saveCampaignZipPages = function _saveCampaignZipPages(checkZipDone) {
             var self = this;
-            console.log("Saving ", self.campaign.pages.length, " Pages");
+            self.console.log("Saving ", self.campaign.pages.length, " Pages");
+            self.console.setLabel1("Saving Pages (6/" + self.TOTAL_STEPS + ")");
+            self.console.setProgress1(5, self.TOTAL_STEPS);
             if (self.campaign.pages.length > 0) {
                 self.pages = self._addZipFolder(self.zip, "pages");
                 self.names = ρσ_list_decorate([]);
@@ -5279,7 +5388,9 @@ var str = ρσ_str, repr = ρσ_repr;;
         Campaign.prototype._saveCampaignZipJukebox = function _saveCampaignZipJukebox(checkZipDone) {
             var self = this;
             var jukebox;
-            console.log("Saving Jukebox audio");
+            self.console.log("Saving Jukebox audio");
+            self.console.setLabel1("Saving Jukebox audio (7/" + self.TOTAL_STEPS + ")");
+            self.console.setProgress1(6, self.TOTAL_STEPS);
             if (self.campaign.jukeboxfolder.length > 0) {
                 jukebox = self._addZipFolder(self.zip, "jukebox");
                 self._addPlaylistToZip(jukebox, self.campaign.jukeboxfolder, checkZipDone);
@@ -5301,7 +5412,7 @@ var str = ρσ_str, repr = ρσ_repr;;
             }
             var checkZipDone;
             if (self.zip !== null) {
-                console.error("Saving already in progress. Can't be cancelled.");
+                self.console.error("Saving already in progress. Can't be cancelled.");
                 return;
             }
             filename = (filename) ? filename : self.title + ".zip";
@@ -5328,7 +5439,8 @@ var str = ρσ_str, repr = ρσ_repr;;
                         self._saveZipToFile(self.zip, filename);
                         self.zip = null;
                     }
-                    console.log("Download operations in progress : ", self._pending_operations.length);
+                    self.console.log("Download operations in progress : ", self._pending_operations.length);
+                    self.console.setProgress2(0, self._pending_operations.length);
                 }
             };
             checkZipDone();
@@ -5346,6 +5458,7 @@ var str = ρσ_str, repr = ρσ_repr;;
             if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "filename")){
                 filename = ρσ_kwargs_obj.filename;
             }
+            self.console.show();
             self.parseCampaign((function() {
                 var ρσ_anonfunc = function (campaign) {
                     self.saveCampaignZip(filename);
@@ -5368,11 +5481,295 @@ var str = ρσ_str, repr = ρσ_repr;;
             return this.__repr__();
         };
         Object.defineProperty(Campaign.prototype, "__bases__", {value: []});
+        Campaign.prototype.TOTAL_STEPS = 8;
+
+        function ModalWindow() {
+            if (this.ρσ_object_id === undefined) Object.defineProperty(this, "ρσ_object_id", {"value":++ρσ_object_counter});
+            ModalWindow.prototype.__init__.apply(this, arguments);
+        }
+        ModalWindow.prototype.__init__ = function __init__() {
+            var self = this;
+            var title = (arguments[0] === undefined || ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? __init__.__defaults__.title : arguments[0];
+            var modalClass = (arguments[1] === undefined || ( 1 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? __init__.__defaults__.modalClass : arguments[1];
+            var ρσ_kwargs_obj = arguments[arguments.length-1];
+            if (ρσ_kwargs_obj === null || typeof ρσ_kwargs_obj !== "object" || ρσ_kwargs_obj [ρσ_kwargs_symbol] !== true) ρσ_kwargs_obj = {};
+            if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "title")){
+                title = ρσ_kwargs_obj.title;
+            }
+            if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "modalClass")){
+                modalClass = ρσ_kwargs_obj.modalClass;
+            }
+            var modal_div, css;
+            self.title = title;
+            modal_div = $("body ." + modalClass);
+            if (modal_div.length > 0) {
+                modal_div.remove();
+            }
+            self.modal_div = $("<div class=\"" + modalClass + "\"><div class=\"" + modalClass + "-content\"></div></div>");
+            css = "\n            /* The Modal (background) */\n            .modal {\n                display: none; /* Hidden by default */\n                position: fixed; /* Stay in place */\n                z-index: 9999; /* Sit on top */\n                padding-top: 100px; /* Location of the box */\n                left: 0;\n                top: 0;\n                width: 100%; /* Full width */\n                height: 100%; /* Full height */\n                overflow: auto; /* Enable scroll if needed */\n                background-color: rgb(0,0,0); /* Fallback color */\n                background-color: rgba(0,0,0,0.4); /* Black w/ opacity */\n                }\n            \n            /* Modal Content */\n            .modal-content {\n                background-color: #fefefe;\n                margin: auto;\n                padding: 20px;\n                border: 1px solid #888;\n                width: 80%;\n                height: 80%;\n                overflow: auto; /* Enable scroll if needed */\n            }\n            .modal-content .title {\n                position: relative;\n                top: -20px;\n                left: -50%;\n                width: 200%;\n                text-align: center;\n                border: 2px solid black;\n                margin: 5px;\n            }\n            .modal-content .log {\n                background-color: #ddd;\n            }\n            .modal-content .warn {\n                background-color: gold;\n                font-style: italic;\n            }\n        ".replace(/modal/g, modalClass);
+            $("body").append($("<style>" + css + "</style>"));
+            $("body").append(self.modal_div);
+            self.content = self.modal_div.find("." + modalClass + "-content");
+            self.main_progress = new ProgressBar;
+            self.mp_current = self.mp_total = 1;
+            self.second_progress = new ProgressBar;
+            self.sp_current = self.sp_total = 1;
+            self.page_progress = new ProgressBar;
+            self.pp_current = self.pp_total = 1;
+            self.setPageLabel(null);
+            self.clear();
+            self.hide();
+        };
+        if (!ModalWindow.prototype.__init__.__defaults__) Object.defineProperties(ModalWindow.prototype.__init__, {
+            __defaults__ : {value: {title:"", modalClass:"modal"}},
+            __handles_kwarg_interpolation__ : {value: true},
+            __argnames__ : {value: ["title", "modalClass"]}
+        });
+        ModalWindow.__argnames__ = ModalWindow.prototype.__init__.__argnames__;
+        ModalWindow.__handles_kwarg_interpolation__ = ModalWindow.prototype.__init__.__handles_kwarg_interpolation__;
+        ModalWindow.prototype.clear = function clear() {
+            var self = this;
+            self.content.html("");
+            self.content.append($("<div class=\"title\">" + self.title + "</div>"));
+            self.content.append(self.main_progress.getElement());
+            self.content.append(self.page_progress.getElement());
+            self.content.append(self.second_progress.getElement());
+            self.content.append($("<div class=\"warn\"></div>"));
+            self.content.append($("<details class=\"log\" open><summary>Log</summary></details>"));
+        };
+        ModalWindow.prototype.hide = function hide() {
+            var self = this;
+            self.modal_div.css("display", "none");
+        };
+        ModalWindow.prototype.show = function show() {
+            var self = this;
+            self.modal_div.css("display", "block");
+        };
+        ModalWindow.prototype.append = function append(content) {
+            var self = this;
+            self.content.append($(content));
+        };
+        if (!ModalWindow.prototype.append.__argnames__) Object.defineProperties(ModalWindow.prototype.append, {
+            __argnames__ : {value: ["content"]}
+        });
+        ModalWindow.prototype.log = function log() {
+            var self = this;
+            var args = Array.prototype.slice.call(arguments, 0);
+            if (arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true) args.pop();
+            var line, a;
+            console.log.apply(console, args);
+            line = "";
+            var ρσ_Iter18 = ρσ_Iterable(args);
+            for (var ρσ_Index18 = 0; ρσ_Index18 < ρσ_Iter18.length; ρσ_Index18++) {
+                a = ρσ_Iter18[ρσ_Index18];
+                line += str(a) + " ";
+            }
+            self.content.find(".log").append("<p>" + line.replace(/\n/g, "<br/>") + "</p>");
+        };
+        if (!ModalWindow.prototype.log.__handles_kwarg_interpolation__) Object.defineProperties(ModalWindow.prototype.log, {
+            __handles_kwarg_interpolation__ : {value: true}
+        });
+        ModalWindow.prototype.warn = function warn() {
+            var self = this;
+            var args = Array.prototype.slice.call(arguments, 0);
+            if (arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true) args.pop();
+            var line, a;
+            console.warn.apply(console, args);
+            line = "";
+            var ρσ_Iter19 = ρσ_Iterable(args);
+            for (var ρσ_Index19 = 0; ρσ_Index19 < ρσ_Iter19.length; ρσ_Index19++) {
+                a = ρσ_Iter19[ρσ_Index19];
+                line += str(a) + " ";
+            }
+            self.content.find(".warn").append($("<p>" + line.replace(/\n/g, "<br/>") + "</p"));
+        };
+        if (!ModalWindow.prototype.warn.__handles_kwarg_interpolation__) Object.defineProperties(ModalWindow.prototype.warn, {
+            __handles_kwarg_interpolation__ : {value: true}
+        });
+        ModalWindow.prototype.setLabel1 = function setLabel1(label) {
+            var self = this;
+            self.main_progress.setLabel(label);
+        };
+        if (!ModalWindow.prototype.setLabel1.__argnames__) Object.defineProperties(ModalWindow.prototype.setLabel1, {
+            __argnames__ : {value: ["label"]}
+        });
+        ModalWindow.prototype.setLabel2 = function setLabel2(label) {
+            var self = this;
+            self.second_progress.setLabel(label);
+        };
+        if (!ModalWindow.prototype.setLabel2.__argnames__) Object.defineProperties(ModalWindow.prototype.setLabel2, {
+            __argnames__ : {value: ["label"]}
+        });
+        ModalWindow.prototype.setPageLabel = function setPageLabel(label) {
+            var self = this;
+            if (label) {
+                self.page_progress.getElement().css("display", "block");
+                self.page_progress.setLabel(label);
+            } else {
+                self.page_progress.getElement().css("display", "none");
+                self.setPageProgress(0, 1);
+            }
+        };
+        if (!ModalWindow.prototype.setPageLabel.__argnames__) Object.defineProperties(ModalWindow.prototype.setPageLabel, {
+            __argnames__ : {value: ["label"]}
+        });
+        ModalWindow.prototype.setProgress1 = function setProgress1() {
+            var self = this;
+            var current = ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true) ? undefined : arguments[0];
+            var total = (arguments[1] === undefined || ( 1 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? setProgress1.__defaults__.total : arguments[1];
+            var ρσ_kwargs_obj = arguments[arguments.length-1];
+            if (ρσ_kwargs_obj === null || typeof ρσ_kwargs_obj !== "object" || ρσ_kwargs_obj [ρσ_kwargs_symbol] !== true) ρσ_kwargs_obj = {};
+            if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "total")){
+                total = ρσ_kwargs_obj.total;
+            }
+            self.main_progress.setProgress(current, total);
+            self.mp_current = current;
+            self.mp_total = (total) ? total : self.main_progress.total;
+        };
+        if (!ModalWindow.prototype.setProgress1.__defaults__) Object.defineProperties(ModalWindow.prototype.setProgress1, {
+            __defaults__ : {value: {total:null}},
+            __handles_kwarg_interpolation__ : {value: true},
+            __argnames__ : {value: ["current", "total"]}
+        });
+        ModalWindow.prototype.setProgress2 = function setProgress2() {
+            var self = this;
+            var current = ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true) ? undefined : arguments[0];
+            var total = (arguments[1] === undefined || ( 1 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? setProgress2.__defaults__.total : arguments[1];
+            var ρσ_kwargs_obj = arguments[arguments.length-1];
+            if (ρσ_kwargs_obj === null || typeof ρσ_kwargs_obj !== "object" || ρσ_kwargs_obj [ρσ_kwargs_symbol] !== true) ρσ_kwargs_obj = {};
+            if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "total")){
+                total = ρσ_kwargs_obj.total;
+            }
+            var percent;
+            self.second_progress.setProgress(current, total);
+            self.sp_current = current;
+            self.sp_total = self.second_progress.total;
+            percent = self.sp_current / self.sp_total;
+            if (self.pp_total > 1) {
+                self.page_progress.setProgress(self.pp_current + percent);
+                percent = self.pp_current / self.pp_total;
+            }
+            self.main_progress.setProgress(self.mp_current + percent);
+        };
+        if (!ModalWindow.prototype.setProgress2.__defaults__) Object.defineProperties(ModalWindow.prototype.setProgress2, {
+            __defaults__ : {value: {total:null}},
+            __handles_kwarg_interpolation__ : {value: true},
+            __argnames__ : {value: ["current", "total"]}
+        });
+        ModalWindow.prototype.setPageProgress = function setPageProgress() {
+            var self = this;
+            var current = ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true) ? undefined : arguments[0];
+            var total = (arguments[1] === undefined || ( 1 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? setPageProgress.__defaults__.total : arguments[1];
+            var ρσ_kwargs_obj = arguments[arguments.length-1];
+            if (ρσ_kwargs_obj === null || typeof ρσ_kwargs_obj !== "object" || ρσ_kwargs_obj [ρσ_kwargs_symbol] !== true) ρσ_kwargs_obj = {};
+            if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "total")){
+                total = ρσ_kwargs_obj.total;
+            }
+            var percent;
+            self.page_progress.setProgress(current, total);
+            self.pp_current = current;
+            self.pp_total = self.page_progress.total;
+            percent = self.pp_current / self.pp_total;
+            self.main_progress.setProgress(self.mp_current + percent);
+        };
+        if (!ModalWindow.prototype.setPageProgress.__defaults__) Object.defineProperties(ModalWindow.prototype.setPageProgress, {
+            __defaults__ : {value: {total:null}},
+            __handles_kwarg_interpolation__ : {value: true},
+            __argnames__ : {value: ["current", "total"]}
+        });
+        ModalWindow.prototype.__repr__ = function __repr__ () {
+                        return "<" + __name__ + "." + this.constructor.name + " #" + this.ρσ_object_id + ">";
+        };
+        ModalWindow.prototype.__str__ = function __str__ () {
+            return this.__repr__();
+        };
+        Object.defineProperty(ModalWindow.prototype, "__bases__", {value: []});
+
+        function ProgressBar() {
+            if (this.ρσ_object_id === undefined) Object.defineProperty(this, "ρσ_object_id", {"value":++ρσ_object_counter});
+            ProgressBar.prototype.__init__.apply(this, arguments);
+        }
+        ProgressBar.prototype.__init__ = function __init__() {
+            var self = this;
+            var label = (arguments[0] === undefined || ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? __init__.__defaults__.label : arguments[0];
+            var current = (arguments[1] === undefined || ( 1 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? __init__.__defaults__.current : arguments[1];
+            var total = (arguments[2] === undefined || ( 2 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? __init__.__defaults__.total : arguments[2];
+            var ρσ_kwargs_obj = arguments[arguments.length-1];
+            if (ρσ_kwargs_obj === null || typeof ρσ_kwargs_obj !== "object" || ρσ_kwargs_obj [ρσ_kwargs_symbol] !== true) ρσ_kwargs_obj = {};
+            if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "label")){
+                label = ρσ_kwargs_obj.label;
+            }
+            if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "current")){
+                current = ρσ_kwargs_obj.current;
+            }
+            if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "total")){
+                total = ρσ_kwargs_obj.total;
+            }
+            self.progress = $("<div style=\"width: 100%; background-color: grey; margin: 5px\">\n                               <span style=\"float: left; position: relative; left: 50%; line-height: 20px\">\n                                  <strong style=\"float: left; position: relative; left: -50%\"></strong>\n                               </span>\n                               <div style=\"background-color: dodgerblue; height: 20px;\"></div>\n                             </div>");
+            self.setLabel(label);
+            self.setProgress(current, total);
+        };
+        if (!ProgressBar.prototype.__init__.__defaults__) Object.defineProperties(ProgressBar.prototype.__init__, {
+            __defaults__ : {value: {label:"", current:0, total:100}},
+            __handles_kwarg_interpolation__ : {value: true},
+            __argnames__ : {value: ["label", "current", "total"]}
+        });
+        ProgressBar.__argnames__ = ProgressBar.prototype.__init__.__argnames__;
+        ProgressBar.__handles_kwarg_interpolation__ = ProgressBar.prototype.__init__.__handles_kwarg_interpolation__;
+        ProgressBar.prototype.setLabel = function setLabel(label) {
+            var self = this;
+            self.progress.find("strong").html(label);
+        };
+        if (!ProgressBar.prototype.setLabel.__argnames__) Object.defineProperties(ProgressBar.prototype.setLabel, {
+            __argnames__ : {value: ["label"]}
+        });
+        ProgressBar.prototype.setProgress = function setProgress() {
+            var self = this;
+            var current = ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true) ? undefined : arguments[0];
+            var total = (arguments[1] === undefined || ( 1 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? setProgress.__defaults__.total : arguments[1];
+            var ρσ_kwargs_obj = arguments[arguments.length-1];
+            if (ρσ_kwargs_obj === null || typeof ρσ_kwargs_obj !== "object" || ρσ_kwargs_obj [ρσ_kwargs_symbol] !== true) ρσ_kwargs_obj = {};
+            if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "total")){
+                total = ρσ_kwargs_obj.total;
+            }
+            var percent;
+            if (total) {
+                self.total = total;
+            }
+            self.current = current;
+            percent = self.getPercent();
+            self.progress.find("div").css("width", str(percent.toFixed(2)) + "%");
+        };
+        if (!ProgressBar.prototype.setProgress.__defaults__) Object.defineProperties(ProgressBar.prototype.setProgress, {
+            __defaults__ : {value: {total:null}},
+            __handles_kwarg_interpolation__ : {value: true},
+            __argnames__ : {value: ["current", "total"]}
+        });
+        ProgressBar.prototype.getPercent = function getPercent() {
+            var self = this;
+            var percent;
+            if ((self.total === 0 || typeof self.total === "object" && ρσ_equals(self.total, 0))) {
+                percent = 100;
+            } else {
+                percent = self.current * 100 / self.total;
+            }
+            return percent;
+        };
+        ProgressBar.prototype.getElement = function getElement() {
+            var self = this;
+            return self.progress;
+        };
+        ProgressBar.prototype.__repr__ = function __repr__ () {
+                        return "<" + __name__ + "." + this.constructor.name + " #" + this.ρσ_object_id + ">";
+        };
+        ProgressBar.prototype.__str__ = function __str__ () {
+            return this.__repr__();
+        };
+        Object.defineProperty(ProgressBar.prototype, "__bases__", {value: []});
 
         console.log("Roll20 Campaign exporter loaded.");
-        console.log("To export your Roll20 campaign, enter R20Exporter.exportCampaignZip() and be patient.");
-        console.log("Note that you should not open a different campaign in Roll20 as it can interfere with the download of some resources.");
-        console.log("DISCLAIMER: Please note that using this tool to export a module from the marketplace may infringe on the Marketplace Asset License and/or Roll20 EULA.");
+        console.log("To export your Roll20 campaign, enter R20Exporter.exportCampaignZip() or click on the button in the Settings sidebar.");
         window.R20Exporter = new Campaign(window.$("head title").text().trim().replace(" | Roll20", ""));
+        window.ProgressBar = ProgressBar;
     })();
 })();
