@@ -735,8 +735,8 @@ class ModalWindow:
             .modal {
                 display: none; /* Hidden by default */
                 position: fixed; /* Stay in place */
-                z-index: 9999; /* Sit on top */
-                padding-top: 100px; /* Location of the box */
+                z-index: 100000; /* Sit on top */
+                padding-top: 50px; /* Location of the box */
                 left: 0;
                 top: 0;
                 width: 100%; /* Full width */
@@ -744,26 +744,30 @@ class ModalWindow:
                 overflow: auto; /* Enable scroll if needed */
                 background-color: rgb(0,0,0); /* Fallback color */
                 background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
-                }
+            }
             
             /* Modal Content */
             .modal-content {
                 background-color: #fefefe;
                 margin: auto;
                 padding: 20px;
-                border: 1px solid #888;
+                border: 3px solid #333;
+                border-radius: 25px;
                 width: 80%;
                 height: 80%;
                 overflow: auto; /* Enable scroll if needed */
+                overflow-x: hidden; /* Disable horizontal scroll */
             }
             .modal-content .title {
                 position: relative;
                 top: -20px;
-                left: -50%;
-                width: 200%;
+                left: -20px;
+                width: calc(100% + 40px);
                 text-align: center;
-                border: 2px solid black;
-                margin: 5px;
+                color: white;
+                background-color: black;
+                font-size: 1.25em;
+                font-weight: bold;
             }
             .modal-content .log {
                 background-color: #ddd;
