@@ -1,18 +1,14 @@
 This project has two apps in it, one for exporting your campaign from Roll 20, the other for converting it into a Foundry VTT world.
 
 # R20Exporter
+You can either install the script as a [Tampermonkey](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo?hl=en) user script, or, if you don't use or don't want to use Tampermonkey, then you can also open the standalone file and copy/paste its content in the browser's console instead.
 
-For now, this is how you do it (Eventually I'll make it integrate UI elements into the page):
-You can either install the script as a [Tampermonkey](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo?hl=en) user script, or, if you don't use or don't want to use Tampermonkey, then you can also open the file and copy/paste its content in the browser's console instead.
-If you use Tampermonkey, then install the dist/R20Exporter.js file as a user script then reload your R20 campaign page and follow these instructions, skipping Step 4, otherwise, follow these entire instructions : 
+Make sure you use Chrome, as this will not work on Firefox or other browsers.
 
-1 - Open R20 campaign in chrome (Make sure you have the latest version of chrome, as it will not work in Firefox), 
-2 - Wait for it to finish loading the page, 
-3 - press Ctrl-Alt-J to open the development console. 
-4 - If you haven't installed R20Exporter.js as a Tampermonkey script, then copy-paste the whole R20Exporter_standalone.js file contents into the development console and press Enter.
-5 - Type : R20Exporter.exportCampaignZip()
-6 - Wait for it to parse all the data, could take a few minutes as it downloads all of the assets
-7 - Zip file will start downloading once it's done.
+If you use Tampermonkey, then install the dist/R20Exporter.js file as a user script then reload your R20 campaign page.
+If you want to use the standalone method instead, then open your R20 campaign, then press F12 to open the developer's console, open the dist/R20Exporter_standalone.js file and copy/paste its content into the developer's console and press Enter.
+
+To export your campaign go to the settings tab in the Roll20 page (the gear icon on the far right of the sidebar) and at the top you should see a button "Export Campaign to ZIP". Simply click on it, then wait until the ZIP file is downloaded.
 
 While generating the ZIP file, do make sure you have the campaign tab focused in chrome (separate it in its own window if needed), otherwise the download speed of the zip will drop to very very slow transfer speeds since the javascript that generates the zip on the fly will be running as a low priority background process.
 
@@ -30,7 +26,7 @@ I personally run it this way on linux :
 ./src/R20Converter.py --auto-doors --enable-fog --restrict-movement --gm-password "mygmpassword"  "my-world" "My R20 campaign.zip"
 ```
 
-If you are on Windows and use the windows binary, open a command prompt (cmd.exe) and go to the directory where the script is, then run tofvtt.exe with the options you want.
+If you are on Windows and use the windows binary, open a command prompt (cmd.exe) and go to the directory where the script is, then run R20Converter.exe with the options you want.
 
 ```
 C:\Users\kakaroto\Downloads\R20Exporter_and_R20Converter\windows\R20Converter.exe --auto-doors --enable-fog --restrict-movement "my-world" "My R20 campaign.zip"
