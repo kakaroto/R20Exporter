@@ -7,7 +7,7 @@ def toBlob(obj):
     return new Blob([toJSON(obj)], {"type": 'text/json'})
 
 class Campaign:
-    TOTAL_STEPS = 8
+    TOTAL_STEPS = 10
     def __init__(self, title):
         self.title = title
         self.campaign = {}
@@ -158,8 +158,8 @@ class Campaign:
                      "otherwise it could take hours instead of minutes to generate the ZIP file for your campaign.\n"
                      "You can separate the tab into its own window if you want to keep using your browser in the meantime.")
         self.console.log("Generating ZIP file with ", size.toFixed(2), BYTES[div] + " of data")
-        self.console.setLabel1("Generating " + str(size.toFixed(2)) + BYTES[div] + " ZIP file (8/" + self.TOTAL_STEPS + ")")
-        self.console.setProgress1(7, self.TOTAL_STEPS)
+        self.console.setLabel1("Generating " + str(size.toFixed(2)) + BYTES[div] + " ZIP file (" + self.TOTAL_STEPS + "/" + self.TOTAL_STEPS + ")")
+        self.console.setProgress1(self.TOTAL_STEPS - 1, self.TOTAL_STEPS)
 
         requestFileSystem = window.webkitRequestFileSystem or window.mozRequestFileSystem or window.requestFileSystem
 
@@ -302,7 +302,12 @@ class Campaign:
         if data.jukeboxfolderstatus:
             data.jukebosfolderstatus = data.jukeboxfolderstatus.split(",")
         if data.macrobar:
-            data.macrobar = data.macrobar.split(",")
+            macros = data.macrobar.split(",")
+            data.macrobar = []
+            for macro in macros:
+                if macro != "":
+                    src, id = macro.split("|")
+                    data.macrobar.append({"src": src, "id": id})
         if data.adv_fow_revealed:
             data.adv_fow_revealed = JSON.parse(data.adv_fow_revealed)
         return data
@@ -314,6 +319,36 @@ class Campaign:
         self.console.log("Finished parsing players.")
         return array
 
+    def parseMacros(self, players):
+        array = []
+        for player in players.models:
+            macros = player.macros.toJSON()
+            for macro in macros:
+                macro.player_id = player.id
+            array.append(macros)
+        self.console.log("Finished parsing Macros.")
+        return array
+
+    def parseDecks(self, decks):
+        array = []
+        for deck in decks.models:
+            data = deck.toJSON()
+            cards = deck.cards.toJSON()
+            data.cards = {}
+            for card in cards:
+                data.cards[card.id] = card
+            data.currentDeck = data.currentDeck.split(",")
+            array.append(data)
+        self.console.log("Finished parsing Decks.")
+        return array
+
+    def parseTables(self, tables):
+        array = []
+        for table in tables.models:
+            array.append(table.toJSON())
+        self.console.log("Finished parsing Rollable Tables.")
+        return array
+
     def loadArchivedPages(self):
         num_loaded = 0
         for page in window.Campaign.pages.models:
@@ -323,7 +358,7 @@ class Campaign:
         return num_loaded
 
     def _parseChatArchiveHTML(self, obj, html):
-        scripts = window.$(html).filter("script[type='text/javascript']")
+        scripts = $(html).filter("script[type='text/javascript']")
         prefix = "var msgdata = \""
         for i in range(scripts.length):
             content = scripts[i].textContent.trim()
@@ -365,6 +400,9 @@ class Campaign:
         result.characters = self.parseCharacters(window.Campaign.characters, done)
         result.pages = self.parsePages(window.Campaign.pages)
         result.players = self.parsePlayers(window.Campaign.players)
+        result.macros = self.parseMacros(window.Campaign.players)
+        result.decks = self.parseDecks(window.Campaign.decks)
+        result.tables = self.parseTables(window.Campaign.rollabletables)
         result.jukebox = window.Jukebox.playlist.toJSON()
         self._fetchChatArchive(result, done)
         if result.jukeboxfolder != "":
@@ -375,7 +413,7 @@ class Campaign:
             result.turnorder = JSON.parse(result.turnorder)
         self.console.log("Download operations in progress : ", self._pending_operations.length)
         self.console.setProgress2(0, self._pending_operations.length)
-        self.console.setLabel1("Downloading Resources (3/" + self.TOTAL_STEPS + ")")
+        self.console.setLabel1("Downloading Journal Resources (3/" + self.TOTAL_STEPS + ")")
         self.console.setProgress1(2, self.TOTAL_STEPS)
         if self.completedOperation(id):
             done()
@@ -457,9 +495,8 @@ class Campaign:
 
     # Most avatar/imgsrc URLs use the 'med' filename, even for the huge map files. We should download the appropriate sized
     # file depending on the image size we are looking for. We just download the highest resolution file that we can instead.
-    def downloadR20Resource(self, folder, prefix, url, finallyCB, try_files=["original", "max", "med", "thumb"]):
+    def downloadR20Resource(self, folder, prefix, url, finallyCB, try_files=["original", "max", "med", "thumb"], use_canvas=False):
         filename = url.split("/")[-1].split(".")[0]
-
         # This is needed so we download the higher res file first.
         # Unfortunately, there are some CORS issues sometimes, so if higher res file fails, download the lower one.
         if try_files.length > 0:
@@ -469,14 +506,21 @@ class Campaign:
                 new_url = url
                 try_files = [""]
 
+            successCB = self._makeAddBlobToZip(folder, prefix + ".png", finallyCB)
             errorCB = def():
-                self.downloadR20Resource(folder, prefix, url, finallyCB, try_files[1:])
-            self.downloadResource(new_url, self._makeAddBlobToZip(folder, prefix + ".png", finallyCB), errorCB)
+                self.downloadR20Resource(folder, prefix, url, finallyCB, try_files[1:], use_canvas)    
+
+            if use_canvas:
+                self.downloadImageViaCanvas(new_url, successCB, errorCB)
+            else:
+                self.downloadResource(new_url, successCB, errorCB)
         else:
-            self.downloadImageViaCanvas(url, self._makeAddBlobToZip(folder, prefix + ".png", finallyCB), def ():
-                                            self.console.log("Couldn't download ", url, " with any alternative filename. Resource has become unavailable")
-                                            finallyCB()
-                                        )
+            if use_canvas:
+                self.console.log("Couldn't download ", url, " with any alternative filename. Resource has become unavailable")
+                finallyCB()
+            else:
+                self.downloadR20Resource(folder, prefix, url, finallyCB, use_canvas=True)
+
             
 
     def _makeNameUnique(self, names, orig_name):
@@ -569,8 +613,8 @@ class Campaign:
                             return def(url):
                                 errorCB = def():
                                     self.console.log("Couldn't download Jukebox audio from url : ", url)
-                                self.completedOperation(id)
                                 self.downloadResource(url, self._makeAddBlobToZip(folder, name, finallyCB), errorCB)
+                                self.completedOperation(id)
                         _makePostErrorCB = def(track_id, finallyCB, id):
                             return def():
                                 self.console.log("Couldn't download Jukebox audio from Battlebards : ", track_id)
@@ -583,10 +627,10 @@ class Campaign:
                         url = None
                         self.console.log("Can't download Audio track (", track.title , "). Unsupported source : ", track.source)
                     if url:
-                        errorCB = def():
-                            self.console.log("Couldn't download Jukebox audio from url : ", url)
-                            finallyCB()
-                        self.downloadResource(url, self._makeAddBlobToZip(folder, name, finallyCB), errorCB)
+                        errorCB = def(url):
+                            return def():
+                                self.console.log("Couldn't download Jukebox audio from url : ", url)
+                        self.downloadResource(url, self._makeAddBlobToZip(folder, name, finallyCB), errorCB(url))
                 else:
                     self.console.log("Can't find Audio Track with ID : ", track)
                     continue
@@ -612,6 +656,7 @@ class Campaign:
         self.console.log("Saving Characters")
         self.console.setLabel1("Saving Characters (4/" + self.TOTAL_STEPS + ")")
         self.console.setProgress1(3, self.TOTAL_STEPS)
+        id = self.newPendingOperation()
         if self.campaign.characters.length > 0:
             characters = self._addZipFolder(self.zip, "characters")
             names = []
@@ -621,12 +666,14 @@ class Campaign:
                 self._addCharacterToZip(char_dir, character, checkZipDone)
 
         self.savingStep = 1
+        self.completedOperation(id)
         checkZipDone()
 
     def _saveCampaignZipJournal(self, checkZipDone):
         self.console.log("Saving Journal")
         self.console.setLabel1("Saving Journal handouts (5/" + self.TOTAL_STEPS + ")")
         self.console.setProgress1(4, self.TOTAL_STEPS)
+        id = self.newPendingOperation()
         if self.campaign.journalfolder.length > 0:
             journal = self._addZipFolder(self.zip, "journal")
             self._addJournalToZip(journal, self.campaign.journalfolder, checkZipDone)
@@ -646,9 +693,11 @@ class Campaign:
                 self._addJournalToZip(folder, orphaned, checkZipDone)
 
         self.savingStep = 2
+        self.completedOperation(id)
         checkZipDone()
 
     def _saveCampaignZipPage(self, checkZipDone):
+        id = self.newPendingOperation()
         if self.savingPageIdx >= self.campaign.pages.length:
             self.savingStep = 4
             self.console.setPageLabel(None)
@@ -663,6 +712,7 @@ class Campaign:
             page_dir = self._addZipFolder(self.pages, name)
             self._addPageToZip(page_dir, page, checkZipDone)
 
+        self.completedOperation(id)
         checkZipDone()
 
     def _saveCampaignZipPages(self, checkZipDone):
@@ -680,11 +730,57 @@ class Campaign:
         self.console.log("Saving Jukebox audio")
         self.console.setLabel1("Saving Jukebox audio (7/" + self.TOTAL_STEPS + ")")
         self.console.setProgress1(6, self.TOTAL_STEPS)
+        id = self.newPendingOperation()
         if self.campaign.jukeboxfolder.length > 0:
             jukebox = self._addZipFolder(self.zip, "jukebox")
             self._addPlaylistToZip(jukebox, self.campaign.jukeboxfolder, checkZipDone)
         self.savingStep = 5
-        self.savingPageIdx = 0
+        self.completedOperation(id)
+        checkZipDone()
+
+
+    def _saveCampaignZipDecks(self, checkZipDone):
+        self.console.log("Saving Decks")
+        self.console.setLabel1("Saving Decks (8/" + self.TOTAL_STEPS + ")")
+        self.console.setProgress1(7, self.TOTAL_STEPS)
+        id = self.newPendingOperation()
+        if self.campaign.decks.length > 0:
+            decks = self._addZipFolder(self.zip, "decks")
+            names = []
+            for deck in self.campaign.decks:
+                name = self._makeNameUnique(names, deck.name)
+                deck_dir = self._addZipFolder(decks, name)
+                if deck.avatar?:
+                    self.downloadR20Resource(deck_dir, "avatar", deck.avatar, checkZipDone)
+                card_names = []
+                for card_id in deck.cards:
+                    card = deck.cards[card_id]
+                    card_name = self._makeNameUnique(card_names, card.name? "")
+                    if card.avatar?:
+                        self.downloadR20Resource(deck_dir, card_name, card.avatar, checkZipDone)
+        self.savingStep = 6
+        self.completedOperation(id)
+        checkZipDone()
+
+    def _saveCampaignZipTables(self, checkZipDone):
+        self.console.log("Saving Rollable Tables")
+        self.console.setLabel1("Saving Rollable Tables (9/" + self.TOTAL_STEPS + ")")
+        self.console.setProgress1(8, self.TOTAL_STEPS)
+        id = self.newPendingOperation()
+        if self.campaign.tables.length > 0:
+            tables = self._addZipFolder(self.zip, "tables")
+            names = []
+            for table in self.campaign.tables:
+                name = self._makeNameUnique(names, table.name)
+                table_dir = self._addZipFolder(tables, name)
+                item_names = []
+                for item_id in table.items:
+                    item = table.items[item_id]
+                    item_name = self._makeNameUnique(item_names, item.name ? "")
+                    if item.avatar?:
+                        self.downloadR20Resource(table_dir, item_name, item.avatar, checkZipDone)
+        self.savingStep = 7
+        self.completedOperation(id)
         checkZipDone()
 
     def saveCampaignZip(self, filename=None):
@@ -702,18 +798,24 @@ class Campaign:
             if not self.hasPendingOperation():
                 #self.console.log("No more pending operations. Current step is ", self.savingStep)
                 if self.savingStep == 0:
-                    self._saveCampaignZipCharacters(checkZipDone)
+                    setTimeout(def(): self._saveCampaignZipCharacters(checkZipDone);, 0)
                 elif self.savingStep == 1:
-                    self._saveCampaignZipJournal(checkZipDone)
+                    setTimeout(def(): self._saveCampaignZipJournal(checkZipDone);, 0)
                 elif self.savingStep == 2:
-                    self._saveCampaignZipPages(checkZipDone)
+                    setTimeout(def(): self._saveCampaignZipPages(checkZipDone);, 0)
                 elif self.savingStep == 3:
-                    self._saveCampaignZipPage(checkZipDone)
+                    setTimeout(def(): self._saveCampaignZipPage(checkZipDone);, 0)
                 elif self.savingStep == 4:
-                    self._saveCampaignZipJukebox(checkZipDone)
+                    setTimeout(def(): self._saveCampaignZipJukebox(checkZipDone);, 0)
+                elif self.savingStep == 5:
+                    setTimeout(def(): self._saveCampaignZipDecks(checkZipDone);, 0)
+                elif self.savingStep == 6:
+                    setTimeout(def(): self._saveCampaignZipTables(checkZipDone);, 0)
                 else:
-                    self._saveZipToFile(self.zip, filename)
-                    self.zip = None
+                    setTimeout(def():
+                                   self._saveZipToFile(self.zip, filename)
+                                   self.zip = None
+                               , 0)
                 self.console.log("Download operations in progress : ", self._pending_operations.length)
                 self.console.setProgress2(0, self._pending_operations.length)
 
@@ -888,5 +990,5 @@ class ProgressBar:
 
 console.log("Roll20 Campaign exporter loaded.")
 console.log("To export your Roll20 campaign, enter R20Exporter.exportCampaignZip() or click on the button in the Settings sidebar.")
-window.R20Exporter = new Campaign(window.$("head title").text().trim().replace(" | Roll20", ""))
+window.R20Exporter = new Campaign($("head title").text().trim().replace(" | Roll20", ""))
 window.ProgressBar = ProgressBar
