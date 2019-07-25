@@ -338,6 +338,7 @@ class Campaign:
             for card in cards:
                 data.cards[card.id] = card
             data.currentDeck = data.currentDeck.split(",")
+            data.discardPile = data.discardPile.split(",")
             array.append(data)
         self.console.log("Finished parsing Decks.")
         return array

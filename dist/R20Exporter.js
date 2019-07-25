@@ -4762,6 +4762,7 @@ var str = ρσ_str, repr = ρσ_repr;;
                     (ρσ_expr_temp = data.cards)[ρσ_bound_index(card.id, ρσ_expr_temp)] = card;
                 }
                 data.currentDeck = data.currentDeck.split(",");
+                data.discardPile = data.discardPile.split(",");
                 array.append(data);
             }
             self.console.log("Finished parsing Decks.");
