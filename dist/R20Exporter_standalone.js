@@ -5967,11 +5967,17 @@ var str = ρσ_str, repr = ρσ_repr;;
         };
         Object.defineProperty(ProgressBar.prototype, "__bases__", {value: []});
 
-        window.addEventListener("DOMContentLoaded", function () {
+        function R20Exporter_init() {
             console.log("Roll20 Campaign exporter loaded.");
             console.log("To export your Roll20 campaign, enter R20Exporter.exportCampaignZip() or click on the button in the Settings sidebar.");
             window.R20Exporter = new Campaign($("head title").text().trim().replace(" | Roll20", ""));
             window.ProgressBar = ProgressBar;
-        });
+        };
+
+        if ((typeof $ !== "undefined" && $ !== null)) {
+            R20Exporter_init();
+        } else {
+            window.addEventListener("DOMContentLoaded", R20Exporter_init);
+        }
     })();
 })();
