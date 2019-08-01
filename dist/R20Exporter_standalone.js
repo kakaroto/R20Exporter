@@ -4771,7 +4771,10 @@ var str = ρσ_str, repr = ρσ_repr;;
             var ρσ_Iter13 = ρσ_Iterable(tables.models);
             for (var ρσ_Index13 = 0; ρσ_Index13 < ρσ_Iter13.length; ρσ_Index13++) {
                 table = ρσ_Iter13[ρσ_Index13];
-                array.append(table.toJSON());
+                table = table.toJSON();
+                table.items = ρσ_exists.n(table.items);
+                ({});
+                array.append(table);
             }
             self.console.log("Finished parsing Rollable Tables.");
             return array;
@@ -5964,9 +5967,11 @@ var str = ρσ_str, repr = ρσ_repr;;
         };
         Object.defineProperty(ProgressBar.prototype, "__bases__", {value: []});
 
-        console.log("Roll20 Campaign exporter loaded.");
-        console.log("To export your Roll20 campaign, enter R20Exporter.exportCampaignZip() or click on the button in the Settings sidebar.");
-        window.R20Exporter = new Campaign($("head title").text().trim().replace(" | Roll20", ""));
-        window.ProgressBar = ProgressBar;
+        window.addEventListener("DOMContentLoaded", function () {
+            console.log("Roll20 Campaign exporter loaded.");
+            console.log("To export your Roll20 campaign, enter R20Exporter.exportCampaignZip() or click on the button in the Settings sidebar.");
+            window.R20Exporter = new Campaign($("head title").text().trim().replace(" | Roll20", ""));
+            window.ProgressBar = ProgressBar;
+        });
     })();
 })();

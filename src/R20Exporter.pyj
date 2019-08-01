@@ -346,7 +346,9 @@ class Campaign:
     def parseTables(self, tables):
         array = []
         for table in tables.models:
-            array.append(table.toJSON())
+            table = table.toJSON()
+            table.items = table.items ? {}
+            array.append(table)
         self.console.log("Finished parsing Rollable Tables.")
         return array
 
@@ -988,8 +990,11 @@ class ProgressBar:
     def getElement(self):
         return self.progress
         
-
-console.log("Roll20 Campaign exporter loaded.")
-console.log("To export your Roll20 campaign, enter R20Exporter.exportCampaignZip() or click on the button in the Settings sidebar.")
-window.R20Exporter = new Campaign($("head title").text().trim().replace(" | Roll20", ""))
-window.ProgressBar = ProgressBar
+# We need to create the campaign only after the DOM is loaded, otherwise when R20ES is loaded, we get an error
+# unable to find '$' because r20es slows down the download of the jquery external script it seems.
+window.addEventListener ("DOMContentLoaded", def():
+    console.log("Roll20 Campaign exporter loaded.")
+    console.log("To export your Roll20 campaign, enter R20Exporter.exportCampaignZip() or click on the button in the Settings sidebar.")
+    window.R20Exporter = new Campaign($("head title").text().trim().replace(" | Roll20", ""))
+    window.ProgressBar=ProgressBar
+    

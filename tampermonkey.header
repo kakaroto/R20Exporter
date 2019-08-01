@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Roll20 Campaign exporter
 // @namespace    http://tampermonkey.net/
-// @version      0.4
+// @version      0.5
 // @description  Export an entire Roll20 Campaign
 // @author       KaKaRoTo
 // @match        https://app.roll20.net/editor/
