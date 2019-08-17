@@ -4731,7 +4731,7 @@ var str = ρσ_str, repr = ρσ_repr;;
                     macro = ρσ_Iter10[ρσ_Index10];
                     macro.player_id = player.id;
                 }
-                array.append(macros);
+                array.extend(macros);
             }
             self.console.log("Finished parsing Macros.");
             return array;
@@ -4741,19 +4741,14 @@ var str = ρσ_str, repr = ρσ_repr;;
         });
         Campaign.prototype.parseDecks = function parseDecks(decks) {
             var self = this;
-            var array, data, cards, card, deck;
+            var array, data, cards, deck;
             array = ρσ_list_decorate([]);
             var ρσ_Iter11 = ρσ_Iterable(decks.models);
             for (var ρσ_Index11 = 0; ρσ_Index11 < ρσ_Iter11.length; ρσ_Index11++) {
                 deck = ρσ_Iter11[ρσ_Index11];
                 data = deck.toJSON();
                 cards = deck.cards.toJSON();
-                data.cards = {};
-                var ρσ_Iter12 = ρσ_Iterable(cards);
-                for (var ρσ_Index12 = 0; ρσ_Index12 < ρσ_Iter12.length; ρσ_Index12++) {
-                    card = ρσ_Iter12[ρσ_Index12];
-                    (ρσ_expr_temp = data.cards)[ρσ_bound_index(card.id, ρσ_expr_temp)] = card;
-                }
+                data.cards = cards;
                 data.currentDeck = data.currentDeck.split(",");
                 data.discardPile = data.discardPile.split(",");
                 array.append(data);
@@ -4766,15 +4761,14 @@ var str = ρσ_str, repr = ρσ_repr;;
         });
         Campaign.prototype.parseTables = function parseTables(tables) {
             var self = this;
-            var array, table;
+            var array, data, table;
             array = ρσ_list_decorate([]);
-            var ρσ_Iter13 = ρσ_Iterable(tables.models);
-            for (var ρσ_Index13 = 0; ρσ_Index13 < ρσ_Iter13.length; ρσ_Index13++) {
-                table = ρσ_Iter13[ρσ_Index13];
-                table = table.toJSON();
-                table.items = ρσ_exists.n(table.items);
-                ({});
-                array.append(table);
+            var ρσ_Iter12 = ρσ_Iterable(tables.models);
+            for (var ρσ_Index12 = 0; ρσ_Index12 < ρσ_Iter12.length; ρσ_Index12++) {
+                table = ρσ_Iter12[ρσ_Index12];
+                data = table.toJSON();
+                data.items = table.tableitems.toJSON();
+                array.append(data);
             }
             self.console.log("Finished parsing Rollable Tables.");
             return array;
@@ -4786,9 +4780,9 @@ var str = ρσ_str, repr = ρσ_repr;;
             var self = this;
             var num_loaded, page;
             num_loaded = 0;
-            var ρσ_Iter14 = ρσ_Iterable(window.Campaign.pages.models);
-            for (var ρσ_Index14 = 0; ρσ_Index14 < ρσ_Iter14.length; ρσ_Index14++) {
-                page = ρσ_Iter14[ρσ_Index14];
+            var ρσ_Iter13 = ρσ_Iterable(window.Campaign.pages.models);
+            for (var ρσ_Index13 = 0; ρσ_Index13 < ρσ_Iter13.length; ρσ_Index13++) {
+                page = ρσ_Iter13[ρσ_Index13];
                 if (!page.fullyLoaded) {
                     page.fullyLoadPage();
                     num_loaded += 1;
@@ -4801,8 +4795,8 @@ var str = ρσ_str, repr = ρσ_repr;;
             var scripts, prefix, content, start, end, chat, i;
             scripts = $(html).filter("script[type='text/javascript']");
             prefix = "var msgdata = \"";
-            for (var ρσ_Index15 = 0; ρσ_Index15 < scripts.length; ρσ_Index15++) {
-                i = ρσ_Index15;
+            for (var ρσ_Index14 = 0; ρσ_Index14 < scripts.length; ρσ_Index14++) {
+                i = ρσ_Index14;
                 content = scripts[(typeof i === "number" && i < 0) ? scripts.length + i : i].textContent.trim();
                 if (content.startsWith(prefix)) {
                     start = len(prefix);
@@ -4904,6 +4898,7 @@ var str = ρσ_str, repr = ρσ_repr;;
             var num_loaded, result, i, updateProgress;
             num_loaded = self.loadArchivedPages();
             result = window.Campaign.toJSON();
+            result["R20Exporter_format"] = "1.0";
             result.campaign_title = self.title;
             result.account_id = window.d20_account_id;
             result.campaign_id = window.campaign_id;
@@ -5152,9 +5147,9 @@ var str = ρσ_str, repr = ρσ_repr;;
                 _list = ρσ_kwargs_obj._list;
             }
             var entry;
-            var ρσ_Iter16 = ρσ_Iterable(journal);
-            for (var ρσ_Index16 = 0; ρσ_Index16 < ρσ_Iter16.length; ρσ_Index16++) {
-                entry = ρσ_Iter16[ρσ_Index16];
+            var ρσ_Iter15 = ρσ_Iterable(journal);
+            for (var ρσ_Index15 = 0; ρσ_Index15 < ρσ_Iter15.length; ρσ_Index15++) {
+                entry = ρσ_Iter15[ρσ_Index15];
                 if ((typeof entry === "string" || typeof typeof entry === "object" && ρσ_equals(typeof entry, "string"))) {
                     _list.append(entry);
                 } else {
@@ -5196,9 +5191,9 @@ var str = ρσ_str, repr = ρσ_repr;;
                     self.downloadR20Resource(folder, "token", character.defaulttoken.imgsrc, finallyCB);
                 }
                 if (ρσ_exists.n(character.defaulttoken.sides)) {
-                    var ρσ_Iter17 = ρσ_Iterable(enumerate(character.defaulttoken.sides));
-                    for (var ρσ_Index17 = 0; ρσ_Index17 < ρσ_Iter17.length; ρσ_Index17++) {
-                        ρσ_unpack = ρσ_Iter17[ρσ_Index17];
+                    var ρσ_Iter16 = ρσ_Iterable(enumerate(character.defaulttoken.sides));
+                    for (var ρσ_Index16 = 0; ρσ_Index16 < ρσ_Iter16.length; ρσ_Index16++) {
+                        ρσ_unpack = ρσ_Iter16[ρσ_Index16];
                         i = ρσ_unpack[0];
                         side = ρσ_unpack[1];
                         self.downloadR20Resource(folder, "side_" + i, side, finallyCB);
@@ -5235,9 +5230,9 @@ var str = ρσ_str, repr = ρσ_repr;;
             var self = this;
             var names, handout, name, handout_dir, character, char_dir, child_dir, journal_entry;
             names = ρσ_list_decorate([]);
-            var ρσ_Iter18 = ρσ_Iterable(journal);
-            for (var ρσ_Index18 = 0; ρσ_Index18 < ρσ_Iter18.length; ρσ_Index18++) {
-                journal_entry = ρσ_Iter18[ρσ_Index18];
+            var ρσ_Iter17 = ρσ_Iterable(journal);
+            for (var ρσ_Index17 = 0; ρσ_Index17 < ρσ_Iter17.length; ρσ_Index17++) {
+                journal_entry = ρσ_Iter17[ρσ_Index17];
                 if ((typeof journal_entry === "string" || typeof typeof journal_entry === "object" && ρσ_equals(typeof journal_entry, "string"))) {
                     handout = self.findID(journal_entry, "handout");
                     if (handout !== null) {
@@ -5269,9 +5264,9 @@ var str = ρσ_str, repr = ρσ_repr;;
             var self = this;
             var names, track, name, url, filename, id, _makePostCB, _makePostErrorCB, errorCB, child_dir, audio;
             names = ρσ_list_decorate([]);
-            var ρσ_Iter19 = ρσ_Iterable(playlist);
-            for (var ρσ_Index19 = 0; ρσ_Index19 < ρσ_Iter19.length; ρσ_Index19++) {
-                audio = ρσ_Iter19[ρσ_Index19];
+            var ρσ_Iter18 = ρσ_Iterable(playlist);
+            for (var ρσ_Index18 = 0; ρσ_Index18 < ρσ_Iter18.length; ρσ_Index18++) {
+                audio = ρσ_Iter18[ρσ_Index18];
                 if ((typeof audio === "string" || typeof typeof audio === "object" && ρσ_equals(typeof audio, "string"))) {
                     track = self.findID(audio, "track");
                     if (track !== null) {
@@ -5371,14 +5366,14 @@ var str = ρσ_str, repr = ρσ_repr;;
             }
             if (page.graphics.length > 0) {
                 graphics = self._addZipFolder(folder, "graphics");
-                var ρσ_Iter20 = ρσ_Iterable(page.graphics);
-                for (var ρσ_Index20 = 0; ρσ_Index20 < ρσ_Iter20.length; ρσ_Index20++) {
-                    graphic = ρσ_Iter20[ρσ_Index20];
+                var ρσ_Iter19 = ρσ_Iterable(page.graphics);
+                for (var ρσ_Index19 = 0; ρσ_Index19 < ρσ_Iter19.length; ρσ_Index19++) {
+                    graphic = ρσ_Iter19[ρσ_Index19];
                     self.downloadR20Resource(graphics, graphic.id, graphic.imgsrc, finallyCB);
                     if (ρσ_exists.n(graphic.sides)) {
-                        var ρσ_Iter21 = ρσ_Iterable(enumerate(graphic.sides));
-                        for (var ρσ_Index21 = 0; ρσ_Index21 < ρσ_Iter21.length; ρσ_Index21++) {
-                            ρσ_unpack = ρσ_Iter21[ρσ_Index21];
+                        var ρσ_Iter20 = ρσ_Iterable(enumerate(graphic.sides));
+                        for (var ρσ_Index20 = 0; ρσ_Index20 < ρσ_Iter20.length; ρσ_Index20++) {
+                            ρσ_unpack = ρσ_Iter20[ρσ_Index20];
                             i = ρσ_unpack[0];
                             side = ρσ_unpack[1];
                             self.downloadR20Resource(graphics, graphic.id + "_side_" + i, side, finallyCB);
@@ -5400,9 +5395,9 @@ var str = ρσ_str, repr = ρσ_repr;;
             if (self.campaign.characters.length > 0) {
                 characters = self._addZipFolder(self.zip, "characters");
                 names = ρσ_list_decorate([]);
-                var ρσ_Iter22 = ρσ_Iterable(self.campaign.characters);
-                for (var ρσ_Index22 = 0; ρσ_Index22 < ρσ_Iter22.length; ρσ_Index22++) {
-                    character = ρσ_Iter22[ρσ_Index22];
+                var ρσ_Iter21 = ρσ_Iterable(self.campaign.characters);
+                for (var ρσ_Index21 = 0; ρσ_Index21 < ρσ_Iter21.length; ρσ_Index21++) {
+                    character = ρσ_Iter21[ρσ_Index21];
                     name = self._makeNameUnique(names, character.name);
                     char_dir = self._addZipFolder(characters, name);
                     self._addCharacterToZip(char_dir, character, checkZipDone);
@@ -5428,9 +5423,9 @@ var str = ρσ_str, repr = ρσ_repr;;
                 all_ids = self._flattenJournalEntries(self.campaign.journalfolder);
                 orphaned = ρσ_list_decorate([]);
                 archived = ρσ_list_decorate([]);
-                var ρσ_Iter23 = ρσ_Iterable(self.campaign.handouts);
-                for (var ρσ_Index23 = 0; ρσ_Index23 < ρσ_Iter23.length; ρσ_Index23++) {
-                    handout = ρσ_Iter23[ρσ_Index23];
+                var ρσ_Iter22 = ρσ_Iterable(self.campaign.handouts);
+                for (var ρσ_Index22 = 0; ρσ_Index22 < ρσ_Iter22.length; ρσ_Index22++) {
+                    handout = ρσ_Iter22[ρσ_Index22];
                     if (!ρσ_in(handout.id, all_ids)) {
                         orphaned.append(handout.id);
                     } else if (handout.archived) {
@@ -5513,7 +5508,7 @@ var str = ρσ_str, repr = ρσ_repr;;
         });
         Campaign.prototype._saveCampaignZipDecks = function _saveCampaignZipDecks(checkZipDone) {
             var self = this;
-            var id, decks, names, name, deck_dir, card_names, card, card_name, card_id, deck;
+            var id, decks, names, name, deck_dir, card_names, card_name, card, deck;
             self.console.log("Saving Decks");
             self.console.setLabel1("Saving Decks (8/" + self.TOTAL_STEPS + ")");
             self.console.setProgress1(7, self.TOTAL_STEPS);
@@ -5521,19 +5516,18 @@ var str = ρσ_str, repr = ρσ_repr;;
             if (self.campaign.decks.length > 0) {
                 decks = self._addZipFolder(self.zip, "decks");
                 names = ρσ_list_decorate([]);
-                var ρσ_Iter24 = ρσ_Iterable(self.campaign.decks);
-                for (var ρσ_Index24 = 0; ρσ_Index24 < ρσ_Iter24.length; ρσ_Index24++) {
-                    deck = ρσ_Iter24[ρσ_Index24];
+                var ρσ_Iter23 = ρσ_Iterable(self.campaign.decks);
+                for (var ρσ_Index23 = 0; ρσ_Index23 < ρσ_Iter23.length; ρσ_Index23++) {
+                    deck = ρσ_Iter23[ρσ_Index23];
                     name = self._makeNameUnique(names, deck.name);
                     deck_dir = self._addZipFolder(decks, name);
                     if (ρσ_exists.n(deck.avatar)) {
                         self.downloadR20Resource(deck_dir, "avatar", deck.avatar, checkZipDone);
                     }
                     card_names = ρσ_list_decorate([]);
-                    var ρσ_Iter25 = ρσ_Iterable(deck.cards);
-                    for (var ρσ_Index25 = 0; ρσ_Index25 < ρσ_Iter25.length; ρσ_Index25++) {
-                        card_id = ρσ_Iter25[ρσ_Index25];
-                        card = (ρσ_expr_temp = deck.cards)[(typeof card_id === "number" && card_id < 0) ? ρσ_expr_temp.length + card_id : card_id];
+                    var ρσ_Iter24 = ρσ_Iterable(deck.cards);
+                    for (var ρσ_Index24 = 0; ρσ_Index24 < ρσ_Iter24.length; ρσ_Index24++) {
+                        card = ρσ_Iter24[ρσ_Index24];
                         card_name = self._makeNameUnique(card_names, ρσ_exists.e(card.name, ""));
                         if (ρσ_exists.n(card.avatar)) {
                             self.downloadR20Resource(deck_dir, card_name, card.avatar, checkZipDone);
@@ -5550,7 +5544,7 @@ var str = ρσ_str, repr = ρσ_repr;;
         });
         Campaign.prototype._saveCampaignZipTables = function _saveCampaignZipTables(checkZipDone) {
             var self = this;
-            var id, tables, names, name, table_dir, item_names, item, item_name, item_id, table;
+            var id, tables, names, name, table_dir, item_names, item_name, item, table;
             self.console.log("Saving Rollable Tables");
             self.console.setLabel1("Saving Rollable Tables (9/" + self.TOTAL_STEPS + ")");
             self.console.setProgress1(8, self.TOTAL_STEPS);
@@ -5558,16 +5552,15 @@ var str = ρσ_str, repr = ρσ_repr;;
             if (self.campaign.tables.length > 0) {
                 tables = self._addZipFolder(self.zip, "tables");
                 names = ρσ_list_decorate([]);
-                var ρσ_Iter26 = ρσ_Iterable(self.campaign.tables);
-                for (var ρσ_Index26 = 0; ρσ_Index26 < ρσ_Iter26.length; ρσ_Index26++) {
-                    table = ρσ_Iter26[ρσ_Index26];
+                var ρσ_Iter25 = ρσ_Iterable(self.campaign.tables);
+                for (var ρσ_Index25 = 0; ρσ_Index25 < ρσ_Iter25.length; ρσ_Index25++) {
+                    table = ρσ_Iter25[ρσ_Index25];
                     name = self._makeNameUnique(names, table.name);
                     table_dir = self._addZipFolder(tables, name);
                     item_names = ρσ_list_decorate([]);
-                    var ρσ_Iter27 = ρσ_Iterable(table.items);
-                    for (var ρσ_Index27 = 0; ρσ_Index27 < ρσ_Iter27.length; ρσ_Index27++) {
-                        item_id = ρσ_Iter27[ρσ_Index27];
-                        item = (ρσ_expr_temp = table.items)[(typeof item_id === "number" && item_id < 0) ? ρσ_expr_temp.length + item_id : item_id];
+                    var ρσ_Iter26 = ρσ_Iterable(table.items);
+                    for (var ρσ_Index26 = 0; ρσ_Index26 < ρσ_Iter26.length; ρσ_Index26++) {
+                        item = ρσ_Iter26[ρσ_Index26];
                         item_name = self._makeNameUnique(item_names, ρσ_exists.e(item.name, ""));
                         if (ρσ_exists.n(item.avatar)) {
                             self.downloadR20Resource(table_dir, item_name, item.avatar, checkZipDone);
@@ -5759,9 +5752,9 @@ var str = ρσ_str, repr = ρσ_repr;;
             var line, a;
             console.log.apply(console, args);
             line = "";
-            var ρσ_Iter28 = ρσ_Iterable(args);
-            for (var ρσ_Index28 = 0; ρσ_Index28 < ρσ_Iter28.length; ρσ_Index28++) {
-                a = ρσ_Iter28[ρσ_Index28];
+            var ρσ_Iter27 = ρσ_Iterable(args);
+            for (var ρσ_Index27 = 0; ρσ_Index27 < ρσ_Iter27.length; ρσ_Index27++) {
+                a = ρσ_Iter27[ρσ_Index27];
                 line += str(a) + " ";
             }
             self.content.find(".log").append("<p>" + line.replace(/\n/g, "<br/>") + "</p>");
@@ -5776,9 +5769,9 @@ var str = ρσ_str, repr = ρσ_repr;;
             var line, a;
             console.warn.apply(console, args);
             line = "";
-            var ρσ_Iter29 = ρσ_Iterable(args);
-            for (var ρσ_Index29 = 0; ρσ_Index29 < ρσ_Iter29.length; ρσ_Index29++) {
-                a = ρσ_Iter29[ρσ_Index29];
+            var ρσ_Iter28 = ρσ_Iterable(args);
+            for (var ρσ_Index28 = 0; ρσ_Index28 < ρσ_Iter28.length; ρσ_Index28++) {
+                a = ρσ_Iter28[ρσ_Index28];
                 line += str(a) + " ";
             }
             self.content.find(".warn").append($("<p>" + line.replace(/\n/g, "<br/>") + "</p"));

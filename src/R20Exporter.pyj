@@ -325,7 +325,7 @@ class Campaign:
             macros = player.macros.toJSON()
             for macro in macros:
                 macro.player_id = player.id
-            array.append(macros)
+            array.extend(macros)
         self.console.log("Finished parsing Macros.")
         return array
 
@@ -334,9 +334,7 @@ class Campaign:
         for deck in decks.models:
             data = deck.toJSON()
             cards = deck.cards.toJSON()
-            data.cards = {}
-            for card in cards:
-                data.cards[card.id] = card
+            data.cards = cards
             data.currentDeck = data.currentDeck.split(",")
             data.discardPile = data.discardPile.split(",")
             array.append(data)
@@ -346,9 +344,9 @@ class Campaign:
     def parseTables(self, tables):
         array = []
         for table in tables.models:
-            table = table.toJSON()
-            table.items = table.items ? {}
-            array.append(table)
+            data = table.toJSON()
+            data.items = table.tableitems.toJSON()
+            array.append(data)
         self.console.log("Finished parsing Rollable Tables.")
         return array
 
@@ -424,6 +422,7 @@ class Campaign:
     def parseCampaign(self, cb):
         num_loaded = self.loadArchivedPages()
         result = window.Campaign.toJSON()
+        result["R20Exporter_format"] = "1.0"
         result.campaign_title = self.title
         result.account_id = window.d20_account_id
         result.campaign_id = window.campaign_id
@@ -756,8 +755,7 @@ class Campaign:
                 if deck.avatar?:
                     self.downloadR20Resource(deck_dir, "avatar", deck.avatar, checkZipDone)
                 card_names = []
-                for card_id in deck.cards:
-                    card = deck.cards[card_id]
+                for card in deck.cards:
                     card_name = self._makeNameUnique(card_names, card.name? "")
                     if card.avatar?:
                         self.downloadR20Resource(deck_dir, card_name, card.avatar, checkZipDone)
@@ -777,8 +775,7 @@ class Campaign:
                 name = self._makeNameUnique(names, table.name)
                 table_dir = self._addZipFolder(tables, name)
                 item_names = []
-                for item_id in table.items:
-                    item = table.items[item_id]
+                for item in table.items:
                     item_name = self._makeNameUnique(item_names, item.name ? "")
                     if item.avatar?:
                         self.downloadR20Resource(table_dir, item_name, item.avatar, checkZipDone)
