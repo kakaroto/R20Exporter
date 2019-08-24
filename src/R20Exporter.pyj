@@ -776,8 +776,8 @@ class Campaign:
                 table_dir = self._addZipFolder(tables, name)
                 item_names = []
                 for item in table.items:
-                    item_name = self._makeNameUnique(item_names, item.name ? "")
-                    if item.avatar?:
+                    if item.avatar? and item.avatar != "":
+                        item_name = self._makeNameUnique(item_names, item.name ? "")
                         self.downloadR20Resource(table_dir, item_name, item.avatar, checkZipDone)
         self.savingStep = 7
         self.completedOperation(id)
