@@ -669,7 +669,7 @@ class Campaign:
 
         self.savingStep = 1
         self.completedOperation(id)
-        checkZipDone()
+        checkZipDone(True)
 
     def _saveCampaignZipJournal(self, checkZipDone):
         self.console.log("Saving Journal")
@@ -696,7 +696,7 @@ class Campaign:
 
         self.savingStep = 2
         self.completedOperation(id)
-        checkZipDone()
+        checkZipDone(True)
 
     def _saveCampaignZipPage(self, checkZipDone):
         id = self.newPendingOperation()
@@ -715,7 +715,7 @@ class Campaign:
             self._addPageToZip(page_dir, page, checkZipDone)
 
         self.completedOperation(id)
-        checkZipDone()
+        checkZipDone(True)
 
     def _saveCampaignZipPages(self, checkZipDone):
         self.console.log("Saving ", self.campaign.pages.length, " Pages")
@@ -726,7 +726,7 @@ class Campaign:
             self.names = []
         self.savingStep = 3
         self.savingPageIdx = 0
-        checkZipDone()
+        checkZipDone(True)
 
     def _saveCampaignZipJukebox(self, checkZipDone):
         self.console.log("Saving Jukebox audio")
@@ -738,7 +738,7 @@ class Campaign:
             self._addPlaylistToZip(jukebox, self.campaign.jukeboxfolder, checkZipDone)
         self.savingStep = 5
         self.completedOperation(id)
-        checkZipDone()
+        checkZipDone(True)
 
 
     def _saveCampaignZipDecks(self, checkZipDone):
@@ -761,7 +761,7 @@ class Campaign:
                         self.downloadR20Resource(deck_dir, card_name, card.avatar, checkZipDone)
         self.savingStep = 6
         self.completedOperation(id)
-        checkZipDone()
+        checkZipDone(True)
 
     def _saveCampaignZipTables(self, checkZipDone):
         self.console.log("Saving Rollable Tables")
@@ -781,7 +781,7 @@ class Campaign:
                         self.downloadR20Resource(table_dir, item_name, item.avatar, checkZipDone)
         self.savingStep = 7
         self.completedOperation(id)
-        checkZipDone()
+        checkZipDone(True)
 
     def saveCampaignZip(self, filename=None):
         if self.zip is not None:
@@ -794,7 +794,7 @@ class Campaign:
         self._addFileToZip(self.zip, 'campaign.json', toBlob(self.campaign))
         if self.campaign.chat_archive?:
             self._addFileToZip(self.zip, 'chat_archive.json', toBlob(self.campaign.chat_archive))
-        checkZipDone = def():
+        checkZipDone = def(show_pending=False):
             if not self.hasPendingOperation():
                 #self.console.log("No more pending operations. Current step is ", self.savingStep)
                 if self.savingStep == 0:
@@ -816,8 +816,9 @@ class Campaign:
                                    self._saveZipToFile(self.zip, filename)
                                    self.zip = None
                                , 0)
-                self.console.log("Download operations in progress : ", self._pending_operations.length)
-                self.console.setProgress2(0, self._pending_operations.length)
+                if show_pending:
+                    self.console.log("Download operations in progress : ", self._pending_operations.length)
+                    self.console.setProgress2(0, self._pending_operations.length)
 
         checkZipDone()
 
