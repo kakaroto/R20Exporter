@@ -1,5 +1,5 @@
 
-JS_FILES=src/R20Exporter.js dist/R20Exporter.js dist/R20Exporter_standalone.js
+JS_FILES=src/R20Exporter.js dist/R20Exporter.user.js dist/R20Exporter_standalone.js
 
 %.js: %.pyj
 	rapydscript lint --globals '$$' --noqa eol-semicolon $<
@@ -19,7 +19,7 @@ dist/R20Exporter_standalone.js: src/R20Exporter.js
 
 
 
-dist/R20Exporter.js: tampermonkey.header src/R20Exporter.js
+dist/R20Exporter.user.js: tampermonkey.header src/R20Exporter.js
 	mkdir -p dist/
 	cat tampermonkey.header > $@
 	echo "window.saveAs = saveAs;" >> $@ ;# Needed to expose the saveAs interface to the exporter in tampermonkey
