@@ -12,7 +12,7 @@ You can either install the script as a [Tampermonkey](https://chrome.google.com/
 
 **Make sure you use Chrome**, as this will not work on Firefox or other browsers.
 
-If you use Tampermonkey, then install the dist/R20Exporter.js file as a user script then reload your R20 campaign page.
+If you use Tampermonkey, then install the [dist/R20Exporter.user.js](https://github.com/kakaroto/R20Exporter/raw/master/dist/R20Exporter.user.js) file as a user script then reload your R20 campaign page.
 If you want to use the standalone method instead, then open your R20 campaign, then press F12 to open the developer's console, open the dist/R20Exporter_standalone.js file in the text editor of your choice and copy/paste its content into the developer's console and press Enter.
 
 To export your campaign go to the settings tab in the Roll20 page (the gear icon on the far right of the sidebar) and at the top you should see a button "**Export Campaign to ZIP**". Simply click on it, then wait until the ZIP file is downloaded.
