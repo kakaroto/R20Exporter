@@ -798,18 +798,25 @@ class Campaign:
         if self.zip is not None:
             self.console.error("Saving already in progress. Can't be cancelled.")
             return
-        filename = filename if filename else (self.title + ".zip")
+        self._zip_filename = filename if filename else (self.title + ".zip")
         self.zip = self._createZipFile()
         self._total_size = 0
         self.savingStep = 0
         self._addFileToZip(self.zip, 'campaign.json', toBlob(self.campaign))
         if self.campaign.chat_archive?:
             self._addFileToZip(self.zip, 'chat_archive.json', toBlob(self.campaign.chat_archive))
-        checkZipDone = def(show_pending=False):
+        self._checkZipDone()
+
+    def _checkZipDone(self, show_pending=False):
             if not self.hasPendingOperation():
                 #self.console.log("No more pending operations. Current step is ", self.savingStep)
+                checkZipDone = def(show_pending):
+                    self._checkZipDone(show_pending)
+
                 if self.savingStep == 0:
                     setTimeout(def(): self._saveCampaignZipCharacters(checkZipDone);, 0)
+                #self.savingStep = 4
+                #self._checkZipDone(True)
                 elif self.savingStep == 1:
                     setTimeout(def(): self._saveCampaignZipJournal(checkZipDone);, 0)
                 elif self.savingStep == 2:
@@ -824,14 +831,13 @@ class Campaign:
                     setTimeout(def(): self._saveCampaignZipTables(checkZipDone);, 0)
                 else:
                     setTimeout(def():
-                                   self._saveZipToFile(self.zip, filename)
+                                   self._saveZipToFile(self.zip, self._zip_filename)
                                    self.zip = None
                                , 0)
                 if show_pending:
                     self.console.log("Download operations in progress : ", self._pending_operations.length)
                     self.console.setProgress2(0, self._pending_operations.length)
 
-        checkZipDone()
 
     def exportCampaignZip(self, filename=None):
         self.console.show()
