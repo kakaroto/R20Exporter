@@ -4855,7 +4855,7 @@ var str = ρσ_str, repr = ρσ_repr;;
                 });
                 return ρσ_anonfunc;
             })();
-            self.downloadResource("https://app.roll20.net/campaigns/chatarchive/" + obj.campaign_id, cb, errorcb);
+            self.downloadResource("https://app.roll20.net/campaigns/chatarchive/" + obj.campaign_id + "/?p=1&onePage=true", cb, errorcb);
         };
         if (!Campaign.prototype._fetchChatArchive.__argnames__) Object.defineProperties(Campaign.prototype._fetchChatArchive, {
             __argnames__ : {value: ["obj", "done"]}
@@ -4902,7 +4902,44 @@ var str = ρσ_str, repr = ρσ_repr;;
         });
         Campaign.prototype.parseCampaign = function parseCampaign(cb) {
             var self = this;
-            var num_loaded, result, i, updateProgress;
+            var character_num_attributes, num_loaded_sheets, num_loaded, result, i, updateProgress;
+            character_num_attributes = window.Campaign.characters.models.map((function() {
+                var ρσ_anonfunc = function (c) {
+                    return c.attribs.length;
+                };
+                if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                    __argnames__ : {value: ["c"]}
+                });
+                return ρσ_anonfunc;
+            })());
+            console.log(character_num_attributes);
+            if (!character_num_attributes.all((function() {
+                var ρσ_anonfunc = function (n) {
+                    return n > 0;
+                };
+                if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                    __argnames__ : {value: ["n"]}
+                });
+                return ρσ_anonfunc;
+            })())) {
+                num_loaded_sheets = character_num_attributes.count((function() {
+                    var ρσ_anonfunc = function (n) {
+                        return n > 0;
+                    };
+                    if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                        __argnames__ : {value: ["n"]}
+                    });
+                    return ρσ_anonfunc;
+                })());
+                self.console.log("Waiting for character sheets to finish loading (" + num_loaded_sheets + "/" + character_num_attributes.length + ")");
+                self.console.setLabel1("Waiting for character sheets to finish loading (1/" + self.TOTAL_STEPS + ")");
+                self.console.setLabel2(num_loaded_sheets + "/" + character_num_attributes.length + " character sheets loaded");
+                self.console.setProgress1(0, self.TOTAL_STEPS);
+                self.console.setProgress2(num_loaded_sheets, character_num_attributes.length);
+                return setTimeout(function () {
+                    self.parseCampaign(cb);
+                }, 1e3);
+            }
             num_loaded = self.loadArchivedPages();
             result = window.Campaign.toJSON();
             result["R20Exporter_format"] = "1.0";
@@ -5278,7 +5315,7 @@ var str = ρσ_str, repr = ρσ_repr;;
                     track = self.findID(audio, "track");
                     if (track !== null) {
                         name = self._makeNameUnique(names, track.title);
-                        if ((name[name.length-4] !== ".mp3" && (typeof name[name.length-4] !== "object" || ρσ_not_equals(name[name.length-4], ".mp3")))) {
+                        if (ρσ_not_equals(name.slice(-4), ".mp3")) {
                             name += ".mp3";
                         }
                         if ((track.source === "My Audio" || typeof track.source === "object" && ρσ_equals(track.source, "My Audio"))) {
@@ -5412,7 +5449,7 @@ var str = ρσ_str, repr = ρσ_repr;;
             }
             self.savingStep = 1;
             self.completedOperation(id);
-            checkZipDone();
+            checkZipDone(true);
         };
         if (!Campaign.prototype._saveCampaignZipCharacters.__argnames__) Object.defineProperties(Campaign.prototype._saveCampaignZipCharacters, {
             __argnames__ : {value: ["checkZipDone"]}
@@ -5450,7 +5487,7 @@ var str = ρσ_str, repr = ρσ_repr;;
             }
             self.savingStep = 2;
             self.completedOperation(id);
-            checkZipDone();
+            checkZipDone(true);
         };
         if (!Campaign.prototype._saveCampaignZipJournal.__argnames__) Object.defineProperties(Campaign.prototype._saveCampaignZipJournal, {
             __argnames__ : {value: ["checkZipDone"]}
@@ -5474,7 +5511,7 @@ var str = ρσ_str, repr = ρσ_repr;;
                 self._addPageToZip(page_dir, page, checkZipDone);
             }
             self.completedOperation(id);
-            checkZipDone();
+            checkZipDone(true);
         };
         if (!Campaign.prototype._saveCampaignZipPage.__argnames__) Object.defineProperties(Campaign.prototype._saveCampaignZipPage, {
             __argnames__ : {value: ["checkZipDone"]}
@@ -5490,7 +5527,7 @@ var str = ρσ_str, repr = ρσ_repr;;
             }
             self.savingStep = 3;
             self.savingPageIdx = 0;
-            checkZipDone();
+            checkZipDone(true);
         };
         if (!Campaign.prototype._saveCampaignZipPages.__argnames__) Object.defineProperties(Campaign.prototype._saveCampaignZipPages, {
             __argnames__ : {value: ["checkZipDone"]}
@@ -5508,7 +5545,7 @@ var str = ρσ_str, repr = ρσ_repr;;
             }
             self.savingStep = 5;
             self.completedOperation(id);
-            checkZipDone();
+            checkZipDone(true);
         };
         if (!Campaign.prototype._saveCampaignZipJukebox.__argnames__) Object.defineProperties(Campaign.prototype._saveCampaignZipJukebox, {
             __argnames__ : {value: ["checkZipDone"]}
@@ -5544,7 +5581,7 @@ var str = ρσ_str, repr = ρσ_repr;;
             }
             self.savingStep = 6;
             self.completedOperation(id);
-            checkZipDone();
+            checkZipDone(true);
         };
         if (!Campaign.prototype._saveCampaignZipDecks.__argnames__) Object.defineProperties(Campaign.prototype._saveCampaignZipDecks, {
             __argnames__ : {value: ["checkZipDone"]}
@@ -5568,8 +5605,8 @@ var str = ρσ_str, repr = ρσ_repr;;
                     var ρσ_Iter26 = ρσ_Iterable(table.items);
                     for (var ρσ_Index26 = 0; ρσ_Index26 < ρσ_Iter26.length; ρσ_Index26++) {
                         item = ρσ_Iter26[ρσ_Index26];
-                        item_name = self._makeNameUnique(item_names, ρσ_exists.e(item.name, ""));
-                        if (ρσ_exists.n(item.avatar)) {
+                        if (ρσ_exists.n(item.avatar) && (item.avatar !== "" && (typeof item.avatar !== "object" || ρσ_not_equals(item.avatar, "")))) {
+                            item_name = self._makeNameUnique(item_names, ρσ_exists.e(item.name, ""));
                             self.downloadR20Resource(table_dir, item_name, item.avatar, checkZipDone);
                         }
                     }
@@ -5577,7 +5614,7 @@ var str = ρσ_str, repr = ρσ_repr;;
             }
             self.savingStep = 7;
             self.completedOperation(id);
-            checkZipDone();
+            checkZipDone(true);
         };
         if (!Campaign.prototype._saveCampaignZipTables.__argnames__) Object.defineProperties(Campaign.prototype._saveCampaignZipTables, {
             __argnames__ : {value: ["checkZipDone"]}
@@ -5590,12 +5627,11 @@ var str = ρσ_str, repr = ρσ_repr;;
             if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "filename")){
                 filename = ρσ_kwargs_obj.filename;
             }
-            var checkZipDone;
             if (self.zip !== null) {
                 self.console.error("Saving already in progress. Can't be cancelled.");
                 return;
             }
-            filename = (filename) ? filename : self.title + ".zip";
+            self._zip_filename = (filename) ? filename : self.title + ".zip";
             self.zip = self._createZipFile();
             self._total_size = 0;
             self.savingStep = 0;
@@ -5603,52 +5639,76 @@ var str = ρσ_str, repr = ρσ_repr;;
             if (ρσ_exists.n(self.campaign.chat_archive)) {
                 self._addFileToZip(self.zip, "chat_archive.json", toBlob(self.campaign.chat_archive));
             }
-            checkZipDone = function () {
-                if (!self.hasPendingOperation()) {
-                    if ((self.savingStep === 0 || typeof self.savingStep === "object" && ρσ_equals(self.savingStep, 0))) {
-                        setTimeout(function () {
-                            self._saveCampaignZipCharacters(checkZipDone);
-                        }, 0);
-                    } else if ((self.savingStep === 1 || typeof self.savingStep === "object" && ρσ_equals(self.savingStep, 1))) {
-                        setTimeout(function () {
-                            self._saveCampaignZipJournal(checkZipDone);
-                        }, 0);
-                    } else if ((self.savingStep === 2 || typeof self.savingStep === "object" && ρσ_equals(self.savingStep, 2))) {
-                        setTimeout(function () {
-                            self._saveCampaignZipPages(checkZipDone);
-                        }, 0);
-                    } else if ((self.savingStep === 3 || typeof self.savingStep === "object" && ρσ_equals(self.savingStep, 3))) {
-                        setTimeout(function () {
-                            self._saveCampaignZipPage(checkZipDone);
-                        }, 0);
-                    } else if ((self.savingStep === 4 || typeof self.savingStep === "object" && ρσ_equals(self.savingStep, 4))) {
-                        setTimeout(function () {
-                            self._saveCampaignZipJukebox(checkZipDone);
-                        }, 0);
-                    } else if ((self.savingStep === 5 || typeof self.savingStep === "object" && ρσ_equals(self.savingStep, 5))) {
-                        setTimeout(function () {
-                            self._saveCampaignZipDecks(checkZipDone);
-                        }, 0);
-                    } else if ((self.savingStep === 6 || typeof self.savingStep === "object" && ρσ_equals(self.savingStep, 6))) {
-                        setTimeout(function () {
-                            self._saveCampaignZipTables(checkZipDone);
-                        }, 0);
-                    } else {
-                        setTimeout(function () {
-                            self._saveZipToFile(self.zip, filename);
-                            self.zip = null;
-                        }, 0);
-                    }
-                    self.console.log("Download operations in progress : ", self._pending_operations.length);
-                    self.console.setProgress2(0, self._pending_operations.length);
-                }
-            };
-            checkZipDone();
+            self._checkZipDone();
         };
         if (!Campaign.prototype.saveCampaignZip.__defaults__) Object.defineProperties(Campaign.prototype.saveCampaignZip, {
             __defaults__ : {value: {filename:null}},
             __handles_kwarg_interpolation__ : {value: true},
             __argnames__ : {value: ["filename"]}
+        });
+        Campaign.prototype._checkZipDone = function _checkZipDone() {
+            var self = this;
+            var show_pending = (arguments[0] === undefined || ( 0 === arguments.length-1 && arguments[arguments.length-1] !== null && typeof arguments[arguments.length-1] === "object" && arguments[arguments.length-1] [ρσ_kwargs_symbol] === true)) ? _checkZipDone.__defaults__.show_pending : arguments[0];
+            var ρσ_kwargs_obj = arguments[arguments.length-1];
+            if (ρσ_kwargs_obj === null || typeof ρσ_kwargs_obj !== "object" || ρσ_kwargs_obj [ρσ_kwargs_symbol] !== true) ρσ_kwargs_obj = {};
+            if (Object.prototype.hasOwnProperty.call(ρσ_kwargs_obj, "show_pending")){
+                show_pending = ρσ_kwargs_obj.show_pending;
+            }
+            var checkZipDone;
+            if (!self.hasPendingOperation()) {
+                checkZipDone = (function() {
+                    var ρσ_anonfunc = function (show_pending) {
+                        self._checkZipDone(show_pending);
+                    };
+                    if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                        __argnames__ : {value: ["show_pending"]}
+                    });
+                    return ρσ_anonfunc;
+                })();
+                if ((self.savingStep === 0 || typeof self.savingStep === "object" && ρσ_equals(self.savingStep, 0))) {
+                    setTimeout(function () {
+                        self._saveCampaignZipCharacters(checkZipDone);
+                    }, 0);
+                } else if ((self.savingStep === 1 || typeof self.savingStep === "object" && ρσ_equals(self.savingStep, 1))) {
+                    setTimeout(function () {
+                        self._saveCampaignZipJournal(checkZipDone);
+                    }, 0);
+                } else if ((self.savingStep === 2 || typeof self.savingStep === "object" && ρσ_equals(self.savingStep, 2))) {
+                    setTimeout(function () {
+                        self._saveCampaignZipPages(checkZipDone);
+                    }, 0);
+                } else if ((self.savingStep === 3 || typeof self.savingStep === "object" && ρσ_equals(self.savingStep, 3))) {
+                    setTimeout(function () {
+                        self._saveCampaignZipPage(checkZipDone);
+                    }, 0);
+                } else if ((self.savingStep === 4 || typeof self.savingStep === "object" && ρσ_equals(self.savingStep, 4))) {
+                    setTimeout(function () {
+                        self._saveCampaignZipJukebox(checkZipDone);
+                    }, 0);
+                } else if ((self.savingStep === 5 || typeof self.savingStep === "object" && ρσ_equals(self.savingStep, 5))) {
+                    setTimeout(function () {
+                        self._saveCampaignZipDecks(checkZipDone);
+                    }, 0);
+                } else if ((self.savingStep === 6 || typeof self.savingStep === "object" && ρσ_equals(self.savingStep, 6))) {
+                    setTimeout(function () {
+                        self._saveCampaignZipTables(checkZipDone);
+                    }, 0);
+                } else {
+                    setTimeout(function () {
+                        self._saveZipToFile(self.zip, self._zip_filename);
+                        self.zip = null;
+                    }, 0);
+                }
+                if (show_pending) {
+                    self.console.log("Download operations in progress : ", self._pending_operations.length);
+                    self.console.setProgress2(0, self._pending_operations.length);
+                }
+            }
+        };
+        if (!Campaign.prototype._checkZipDone.__defaults__) Object.defineProperties(Campaign.prototype._checkZipDone, {
+            __defaults__ : {value: {show_pending:false}},
+            __handles_kwarg_interpolation__ : {value: true},
+            __argnames__ : {value: ["show_pending"]}
         });
         Campaign.prototype.exportCampaignZip = function exportCampaignZip() {
             var self = this;

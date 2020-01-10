@@ -387,7 +387,7 @@ class Campaign:
                 if self.completedOperation(id) and done:
                     done()
             f.readAsText(blob)
-        self.downloadResource("https://app.roll20.net/campaigns/chatarchive/" + obj.campaign_id, cb, errorcb)
+        self.downloadResource("https://app.roll20.net/campaigns/chatarchive/" + obj.campaign_id + "/?p=1&onePage=true", cb, errorcb)
 
     def _parseCampaignDelayed(self, result, cb):
         done = def():
