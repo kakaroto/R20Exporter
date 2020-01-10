@@ -420,6 +420,17 @@ class Campaign:
             done()
 
     def parseCampaign(self, cb):
+        character_num_attributes = window.Campaign.characters.models.map(def (c): return c.attribs.length;)
+        console.log(character_num_attributes)
+        if not character_num_attributes.all(def (n): return n > 0;):
+            num_loaded_sheets = character_num_attributes.count(def(n): return n > 0;)
+            self.console.log("Waiting for character sheets to finish loading (" + num_loaded_sheets + "/" + character_num_attributes.length + ")")
+            self.console.setLabel1("Waiting for character sheets to finish loading (1/" + self.TOTAL_STEPS + ")")
+            self.console.setLabel2(num_loaded_sheets + "/" + character_num_attributes.length + " character sheets loaded")
+            self.console.setProgress1(0, self.TOTAL_STEPS)
+            self.console.setProgress2(num_loaded_sheets, character_num_attributes.length)
+            return setTimeout(def(): self.parseCampaign(cb);, 1000)
+
         num_loaded = self.loadArchivedPages()
         result = window.Campaign.toJSON()
         result["R20Exporter_format"] = "1.0"
