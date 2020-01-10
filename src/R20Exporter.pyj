@@ -609,7 +609,7 @@ class Campaign:
                 track = self.findID(audio, "track")
                 if track is not None:
                     name = self._makeNameUnique(names, track.title)
-                    if name[-4] != ".mp3":
+                    if name[-4:] != ".mp3":
                         name += ".mp3"
                     if track.source == "My Audio":
                         url = "https://app.roll20.net/audio_library/play/" + self.campaign.campaign_id  + "/" + track.track_id
