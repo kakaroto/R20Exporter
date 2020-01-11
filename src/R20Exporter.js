@@ -1,12 +1,6 @@
-function toJSON(obj) {
-    return JSON.stringify(obj, undefined, 4)
-}
 
-function toBlob(obj) {
-    return new Blob([toJSON(obj)], { "type": 'text/json' })
-}
 
-class Campaign {
+class R20Exporter {
     constructor(title) {
         this.title = title
         this.campaign = {}
@@ -16,12 +10,6 @@ class Campaign {
         this.console = new ModalWindow("Exporting Campaign to ZIP file", "r20exporter-modal")
         this.console.warn("Note that you should not open a different campaign in Roll20 as it can interfere with the download of some resources.")
         this.console.warn("<strong>DISCLAIMER: Please note that using this tool to export a module from the marketplace may infringe on the Marketplace Asset License and/or Roll20 EULA.</strong>")
-        $('#r20exporter').remove()
-        let button = $('<a class="btn" id="r20exporter">Export Campaign to ZIP</a>')
-        let content = $("#mysettings .content")
-        content.prepend(button)
-        button.css("width", "calc(100% - " + content.css("padding-right") + " - " + content.css("padding-left") + ")")
-        button.on('click', () => this.exportCampaignZip())
     }
 
     get TOTAL_STEPS() {
@@ -87,7 +75,7 @@ class Campaign {
     }
 
     _createZipFile() {
-        return new window.zip.fs.FS().root
+        return new zip.fs.FS().root
     }
 
     _addZipFolder(zip, filename) {
@@ -103,26 +91,26 @@ class Campaign {
         }
     }
 
-    _exportZip(zip, fileEntry, onend, onprogress, onerror) {
-        window.zip.useWebWorkers = false
+    _exportZip(zipFs, fileEntry, onend, onprogress, onerror) {
+        zip.useWebWorkers = false
         this._current_size = 0
 
         const addEntryToZipWriter = (writer, zip) => {
             setTimeout(() => addEntryToZipWriterDelayed(writer, zip), 0)
         }
 
-        const addEntryToZipWriterDelayed = (writer, zip) => {
+        const addEntryToZipWriterDelayed = (writer, zipFs) => {
             const makeCB = (c) => {
                 return () => {
                     this._current_size += c.data ? c.data.size : 0
                     onprogress(this._current_size, this._total_size)
-                    addEntryToZipWriter(writer, zip)
+                    addEntryToZipWriter(writer, zipFs)
                 }
             }
             const partialprogress = (bytes) => onprogress(this._current_size + bytes, this._total_size)
 
             // Find the current folder/item we need to add
-            let current = zip
+            let current = zipFs
             for (let idx of this._zip_add_indices) {
                 current = current.children[idx]
             }
@@ -136,7 +124,7 @@ class Campaign {
                 } else {
                     // Now that we're done with this folder, go to the next child of the parent
                     this._zip_add_indices[this._zip_add_indices.length-1] += 1
-                    addEntryToZipWriterDelayed(writer, zip)
+                    addEntryToZipWriterDelayed(writer, zipFs)
                 }
                 return
             }
@@ -160,10 +148,10 @@ class Campaign {
             // can't add them recursively like zip.fs.FS.exportZip does because we'll
             // run out of stack quickly due to the number of files.
             this._zip_add_indices = [0]
-            addEntryToZipWriter(writer, zip)
+            addEntryToZipWriter(writer, zipFs)
         }
 
-        window.zip.createWriter(new window.zip.FileWriter(fileEntry, "application/zip"), zipWriterCreated, onerror)
+        zip.createWriter(new zip.FileWriter(fileEntry, "application/zip"), zipWriterCreated, onerror)
     }
 
     // Based on https://gildas-lormeau.github.io/zip.js/demos/demo1.js
@@ -203,8 +191,8 @@ class Campaign {
             this._exportZip(zip, fileEntry, () => {
                     this.console.warn("Congratulations! The Campaign.zip file was generated successfully.\nStarting download.")
                     this.console.setProgress1(this.TOTAL_STEPS, this.TOTAL_STEPS)
-                    setTimeout(() => this.console.hide(), 5000)
-                    fileEntry.file((f) => window.saveAs(f, filename))
+                    setTimeout(() => this.console.hide(), 10000)
+                    fileEntry.file((f) => saveAs(f, filename))
                 }, (current, total) => {
                     const percent = 100 * current / total
                     this.console.setProgress2(current, total)
@@ -219,7 +207,7 @@ class Campaign {
         const side_list = sides.split("|")
         for (let side of side_list) {
             if (side != "")
-                result.push(window.decodeURIComponent(side))
+                result.push(decodeURIComponent(side))
         }
         return result
     }
@@ -265,7 +253,7 @@ class Campaign {
 
     updateModel(data, key, blob, id, cb) {
         if (["bio", "gmnotes", "notes"].includes(key)) {
-            data[key] = window.unescape(blob)
+            data[key] = unescape(blob)
         } else if (key === "defaulttoken") {
             try {
                 data[key] = JSON.parse(blob)
@@ -409,7 +397,7 @@ class Campaign {
 
     loadArchivedPages() {
         let num_loaded = 0
-        for (let page of window.Campaign.pages.models) {
+        for (let page of Campaign.pages.models) {
             if (!page.fullyLoaded) {
                 page.fullyLoadPage()
                 num_loaded += 1
@@ -427,7 +415,7 @@ class Campaign {
                 const start = prefix.length
                 const end = content.indexOf("\";", start)
                 try {
-                    const chat = window.atob(content.slice(start, end))
+                    const chat = atob(content.slice(start, end))
                     obj.chat_archive = JSON.parse(chat)
                 } catch (e) {
                     this.console.log("Unable to parse chat data: ", e)
@@ -466,14 +454,14 @@ class Campaign {
         const id = this.newPendingOperation()
         this.console.setLabel1("Extracting Campaign data (2/" + this.TOTAL_STEPS + ")")
         this.console.setProgress1(1, this.TOTAL_STEPS)
-        result.handouts = this.parseHandouts(window.Campaign.handouts, done)
-        result.characters = this.parseCharacters(window.Campaign.characters, done)
-        result.pages = this.parsePages(window.Campaign.pages)
-        result.players = this.parsePlayers(window.Campaign.players)
-        result.macros = this.parseMacros(window.Campaign.players)
-        result.decks = this.parseDecks(window.Campaign.decks)
-        result.tables = this.parseTables(window.Campaign.rollabletables)
-        result.jukebox = window.Jukebox.playlist.toJSON()
+        result.handouts = this.parseHandouts(Campaign.handouts, done)
+        result.characters = this.parseCharacters(Campaign.characters, done)
+        result.pages = this.parsePages(Campaign.pages)
+        result.players = this.parsePlayers(Campaign.players)
+        result.macros = this.parseMacros(Campaign.players)
+        result.decks = this.parseDecks(Campaign.decks)
+        result.tables = this.parseTables(Campaign.rollabletables)
+        result.jukebox = Jukebox.playlist.toJSON()
         this._fetchChatArchive(result, done)
         if (result.jukeboxfolder != "")
             result.jukeboxfolder = JSON.parse(result.jukeboxfolder)
@@ -490,7 +478,7 @@ class Campaign {
     }
 
     parseCampaign(cb) {
-        const character_num_attributes = window.Campaign.characters.models.map((c) => c.attribs.length)
+        const character_num_attributes = Campaign.characters.models.map((c) => c.attribs.length)
         if (!character_num_attributes.all((n) => n > 0)) {
             const num_loaded_sheets = character_num_attributes.count((n) => n > 0)
             this.console.log("Waiting for character sheets to finish loading (" + num_loaded_sheets + "/" + character_num_attributes.length + ")")
@@ -501,10 +489,10 @@ class Campaign {
             return setTimeout(() => this.parseCampaign(cb), 1000)
         }
 
-        const pages_paths = window.Campaign.pages.models.map((p) => p.thepaths)
+        const pages_paths = Campaign.pages.models.map((p) => p.thepaths)
         if (pages_paths.some((p) => p === undefined)) {
             const num_loaded_pages = pages_paths.count((p) => !!p)
-            const first_unloaded = window.Campaign.pages.models.find((p) => p.thepaths === undefined)
+            const first_unloaded = Campaign.pages.models.find((p) => p.thepaths === undefined)
             if (first_unloaded)
                 first_unloaded.fullyLoadPage()
             this.console.log("Waiting for pages to finish loading (" + num_loaded_pages + "/" + pages_paths.length + ")")
@@ -516,11 +504,11 @@ class Campaign {
         }
 
 
-        let result = window.Campaign.toJSON()
+        let result = Campaign.toJSON()
         result["R20Exporter_format"] = "1.0"
         result.campaign_title = this.title
-        result.account_id = window.d20_account_id
-        result.campaign_id = window.campaign_id
+        result.account_id = d20_account_id
+        result.campaign_id = campaign_id
         this.campaign = result
 
         this.loadArchivedPages()
@@ -541,8 +529,12 @@ class Campaign {
         return result
     }
 
+    
+    jsonToBlob(obj) {
+        return new Blob([JSON.stringify(obj, undefined, 4)], { "type": 'text/json' })
+    }
     saveCampaign(filename = null) {
-        window.saveAs(toBlob(this.campaign), filename || this.title + ".json")
+        saveAs(this.jsonToBlob(this.campaign), filename || this.title + ".json")
     }
 
     exportCampaignJson(filename = null) {
@@ -581,7 +573,7 @@ class Campaign {
     downloadResource(url, cb, errorCB = null) {
         const id = this.newPendingOperation()
 
-        window.fetch(url).then((response) => {
+        fetch(url).then((response) => {
             if (response.status == 200 || response.status == 0) {
                 return Promise.resolve(response.blob())
             } else {
@@ -660,7 +652,7 @@ class Campaign {
     }
 
     _addCharacterToZip(folder, character, finallyCB) {
-        this._addFileToZip(folder, "character.json", toBlob(character))
+        this._addFileToZip(folder, "character.json", this.jsonToBlob(character))
         if ((character.avatar || "") != "") {
             this.downloadR20Resource(folder, "avatar", character.avatar, finallyCB)
         }
@@ -681,7 +673,7 @@ class Campaign {
     }
 
     _addHandoutToZip(folder, handout, finallyCB) {
-        this._addFileToZip(folder, "handout.json", toBlob(handout))
+        this._addFileToZip(folder, "handout.json", this.jsonToBlob(handout))
         if ((handout.avatar || "") != "")
             this.downloadR20Resource(folder, "avatar", handout.avatar, finallyCB)
         if ((handout.notes || "") != "")
@@ -779,7 +771,7 @@ class Campaign {
     }
 
     _addPageToZip(folder, page, finallyCB) {
-        this._addFileToZip(folder, "page.json", toBlob(page))
+        this._addFileToZip(folder, "page.json", this.jsonToBlob(page))
         if ((page.thumbnail || "") != "") {
             this.downloadR20Resource(folder, "thumbnail", page.thumbnail, finallyCB)
         }
@@ -958,9 +950,9 @@ class Campaign {
         this.zip = this._createZipFile()
         this._total_size = 0
         this.savingStep = 0
-        this._addFileToZip(this.zip, 'campaign.json', toBlob(this.campaign))
+        this._addFileToZip(this.zip, 'campaign.json', this.jsonToBlob(this.campaign))
         if (this.campaign.chat_archive)
-            this._addFileToZip(this.zip, 'chat_archive.json', toBlob(this.campaign.chat_archive))
+            this._addFileToZip(this.zip, 'chat_archive.json', this.jsonToBlob(this.campaign.chat_archive))
         this._checkZipDone()
     }
 
@@ -1193,17 +1185,5 @@ class ProgressBar {
     }
 }
 
-function R20Exporter_init() {
-    console.log("Roll20 Campaign exporter loaded.")
-    console.log("To export your Roll20 campaign, enter R20Exporter.exportCampaignZip() or click on the button in the Settings sidebar.")
-    window.R20Exporter = new Campaign($("head title").text().trim().replace(" | Roll20", ""))
-    window.ProgressBar = ProgressBar
-}
-
-// We need to create the campaign only after the DOM is loaded, otherwise when R20ES is installed, we get an error
-// unable to find '$' because r20es slows down the download of the jquery external script it seems.
-// We also need to be able to run it as standalone.
-if ($ !== undefined)
-    R20Exporter_init()
-else
-    window.addEventListener("DOMContentLoaded", R20Exporter_init)
+exporter = new R20Exporter($("head title").text().trim().replace(" | Roll20", ""))
+document.addEventListener("R20ExporterZip", () => exporter.exportCampaignZip(), false)
