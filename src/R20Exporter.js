@@ -83,12 +83,12 @@ class R20Exporter {
         return new zip.fs.FS().root
     }
 
-    _addZipFolder(zip, filename) {
-        return zip.addDirectory(filename)
+    _addZipFolder(zipFs, filename) {
+        return zipFs.addDirectory(filename)
     }
 
-    _addFileToZip(zip, filename, content) {
-        zip.addBlob(filename, content)
+    _addFileToZip(zipFs, filename, content) {
+        zipFs.addBlob(filename, content)
         if (content.size !== undefined) {
             this._total_size += content.size
         } else if (content.length !== undefined) {
@@ -100,8 +100,8 @@ class R20Exporter {
         zip.useWebWorkers = false
         this._current_size = 0
 
-        const addEntryToZipWriter = (writer, zip) => {
-            setTimeout(() => addEntryToZipWriterDelayed(writer, zip), 0)
+        const addEntryToZipWriter = (writer, zipFs) => {
+            setTimeout(() => addEntryToZipWriterDelayed(writer, zipFs), 0)
         }
 
         const addEntryToZipWriterDelayed = (writer, zipFs) => {
@@ -138,12 +138,12 @@ class R20Exporter {
                 // Add the directory and when we're done, start adding its children from index 0
                 this._zip_add_indices.push(0)
                 writer.add(current.getFullname(), null, makeCB(current),
-                    partialprogress, { directory: current.directory, version: current.zipVersion })
+                    partialprogress, { directory: current.directory })
             } else {
                 // Add the file and when we're done, add the next child of the parent
                 this._zip_add_indices[this._zip_add_indices.length-1] += 1
                 writer.add(current.getFullname(), new current.Reader(current.data, onerror), makeCB(current),
-                    partialprogress, { version: current.zipVersion })
+                    partialprogress, { })
             }
         }
 
@@ -160,7 +160,7 @@ class R20Exporter {
     }
 
     // Based on https://gildas-lormeau.github.io/zip.js/demos/demo1.js
-    _saveZipToFile(zip, filename) {
+    _saveZipToFile(zipFs, filename) {
         const BYTES = ["Bytes", "KB", "MB", "GB"]
         const DIV = [1, 1024, 1024 * 1024, 1024 * 1024 * 1024]
         let size = this._total_size
@@ -193,7 +193,7 @@ class R20Exporter {
 
         // Create a tmp.zip file in temporary storage
         createTempFile((fileEntry) => {
-            this._exportZip(zip, fileEntry, () => {
+            this._exportZip(zipFs, fileEntry, () => {
                     this.console.warn("Congratulations! The Campaign.zip file was generated successfully.\nStarting download.")
                     this.console.setProgress1(this.TOTAL_STEPS, this.TOTAL_STEPS)
                     setTimeout(() => this.console.hide(), 10000)
