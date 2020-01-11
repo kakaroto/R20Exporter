@@ -4902,7 +4902,7 @@ var str = ρσ_str, repr = ρσ_repr;;
         });
         Campaign.prototype.parseCampaign = function parseCampaign(cb) {
             var self = this;
-            var character_num_attributes, num_loaded_sheets, num_loaded, result, i, updateProgress;
+            var character_num_attributes, num_loaded_sheets, pages_paths, num_loaded_pages, first_unloaded, result, i, updateProgress;
             character_num_attributes = window.Campaign.characters.models.map((function() {
                 var ρσ_anonfunc = function (c) {
                     return c.attribs.length;
@@ -4912,7 +4912,6 @@ var str = ρσ_str, repr = ρσ_repr;;
                 });
                 return ρσ_anonfunc;
             })());
-            console.log(character_num_attributes);
             if (!character_num_attributes.all((function() {
                 var ρσ_anonfunc = function (n) {
                     return n > 0;
@@ -4940,31 +4939,77 @@ var str = ρσ_str, repr = ρσ_repr;;
                     self.parseCampaign(cb);
                 }, 1e3);
             }
-            num_loaded = self.loadArchivedPages();
+            pages_paths = window.Campaign.pages.models.map((function() {
+                var ρσ_anonfunc = function (p) {
+                    return p.thepaths;
+                };
+                if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                    __argnames__ : {value: ["p"]}
+                });
+                return ρσ_anonfunc;
+            })());
+            if (!pages_paths.all((function() {
+                var ρσ_anonfunc = function (p) {
+                    return (typeof p !== "undefined" && p !== null);
+                };
+                if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                    __argnames__ : {value: ["p"]}
+                });
+                return ρσ_anonfunc;
+            })())) {
+                num_loaded_pages = pages_paths.count((function() {
+                    var ρσ_anonfunc = function (p) {
+                        return (typeof p !== "undefined" && p !== null);
+                    };
+                    if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                        __argnames__ : {value: ["p"]}
+                    });
+                    return ρσ_anonfunc;
+                })());
+                first_unloaded = window.Campaign.pages.models.find((function() {
+                    var ρσ_anonfunc = function (p) {
+                        return !ρσ_exists.n(p.thepaths);
+                    };
+                    if (!ρσ_anonfunc.__argnames__) Object.defineProperties(ρσ_anonfunc, {
+                        __argnames__ : {value: ["p"]}
+                    });
+                    return ρσ_anonfunc;
+                })());
+                if (first_unloaded) {
+                    first_unloaded.fullyLoadPage();
+                }
+                self.console.log("Waiting for pages to finish loading (" + num_loaded_pages + "/" + pages_paths.length + ")");
+                self.console.setLabel1("Waiting for pages to finish loading (1/" + self.TOTAL_STEPS + ")");
+                self.console.setLabel2(num_loaded_pages + "/" + pages_paths.length + " pages loaded");
+                self.console.setProgress1(0, self.TOTAL_STEPS);
+                self.console.setProgress2(num_loaded_pages, pages_paths.length);
+                return setTimeout(function () {
+                    self.parseCampaign(cb);
+                }, 1e3);
+            }
             result = window.Campaign.toJSON();
             result["R20Exporter_format"] = "1.0";
             result.campaign_title = self.title;
             result.account_id = window.d20_account_id;
             result.campaign_id = window.campaign_id;
             self.campaign = result;
-            self.console.log("Waiting ", num_loaded * 5, " seconds for ", num_loaded, " archived pages to finish loading");
+            self.loadArchivedPages();
+            self.console.log("Waiting 5 seconds for archived pages to finish loading");
             self.console.setLabel1("Waiting for archived pages to finish loading (1/" + self.TOTAL_STEPS + ")");
             self.console.setProgress1(0, self.TOTAL_STEPS);
-            if (num_loaded > 0) {
-                i = -1;
-                updateProgress = function () {
-                    i += 1;
-                    self.console.setLabel2("Waiting... " + (num_loaded * 5 - i) + "s");
-                    self.console.setProgress2(i, num_loaded * 5);
-                    if (i < num_loaded * 5) {
-                        setTimeout(updateProgress, 1e3);
-                    }
-                };
-                updateProgress();
-            }
+            i = -1;
+            updateProgress = function () {
+                i += 1;
+                self.console.setLabel2("Waiting... " + (5 - i) + "s");
+                self.console.setProgress2(i, 5);
+                if (i < 5) {
+                    setTimeout(updateProgress, 1e3);
+                }
+            };
+            updateProgress();
             setTimeout(function () {
                 self._parseCampaignDelayed(result, cb);
-            }, num_loaded * 5e3);
+            }, 5e3);
             return result;
         };
         if (!Campaign.prototype.parseCampaign.__argnames__) Object.defineProperties(Campaign.prototype.parseCampaign, {
