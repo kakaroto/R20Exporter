@@ -9,7 +9,12 @@ class R20Exporter {
         this._total_size = 0
         this.console = new ModalWindow("Exporting Campaign to ZIP file", "r20exporter-modal")
         this.console.warn("Note that you should not open a different campaign in Roll20 as it can interfere with the download of some resources.")
-        this.console.warn("<strong>DISCLAIMER: Please note that using this tool to export a module from the marketplace may infringe on the Marketplace Asset License and/or Roll20 EULA.</strong>")
+        this.console.warn("<strong>DISCLAIMER: Please note that using this extension to export a module from the marketplace may infringe on the Marketplace Asset License and/or Roll20 EULA.</strong>")
+        this.console.warn("<em>If you've found this extension useful, please consider supporting the author on <a id='r20exporter-patreon-link' href='#'>Patreon</a>. Thank you!</em>")
+        $("#r20exporter-patreon-link").click((event) => {
+            event.stopPropagation()
+            window.open('https://patreon.com/kakaroto')
+        })
     }
 
     get TOTAL_STEPS() {
@@ -477,7 +482,7 @@ class R20Exporter {
             done()
     }
 
-    parseCampaign(cb) {
+    async parseCampaign(cb) {
         const character_num_attributes = Campaign.characters.models.map((c) => c.attribs.length)
         if (!character_num_attributes.all((n) => n > 0)) {
             const num_loaded_sheets = character_num_attributes.count((n) => n > 0)
@@ -489,18 +494,28 @@ class R20Exporter {
             return setTimeout(() => this.parseCampaign(cb), 1000)
         }
 
-        const pages_paths = Campaign.pages.models.map((p) => p.thepaths)
-        if (pages_paths.some((p) => p === undefined)) {
-            const num_loaded_pages = pages_paths.count((p) => !!p)
-            const first_unloaded = Campaign.pages.models.find((p) => p.thepaths === undefined)
-            if (first_unloaded)
-                first_unloaded.fullyLoadPage()
-            this.console.log("Waiting for pages to finish loading (" + num_loaded_pages + "/" + pages_paths.length + ")")
-            this.console.setLabel1("Waiting for pages to finish loading (1/" + this.TOTAL_STEPS + ")")
-            this.console.setLabel2(num_loaded_pages + "/" + pages_paths.length + " pages loaded")
+        const archived_pages = Campaign.pages.models.filter((p) => !p.fullyLoaded)
+        if (archived_pages.length > 0) {
+            const total_pages = Campaign.pages.models.length
+            const num_loaded_pages = total_pages - archived_pages.length
+            const loading_page = archived_pages[0]
+
+            loading_page.fullyLoadPage()
+            this.console.log("Waiting for archived pages to finish loading (" + num_loaded_pages + "/" + total_pages + ")")
+            this.console.setLabel1("Waiting for archived pages to finish loading (1/" + this.TOTAL_STEPS + ")")
+            this.console.setLabel2(num_loaded_pages + "/" + total_pages + " pages loaded")
             this.console.setProgress1(0, this.TOTAL_STEPS)
-            this.console.setProgress2(num_loaded_pages, pages_paths.length)
-            return setTimeout(() => this.parseCampaign(cb), 100)
+            this.console.setProgress2(num_loaded_pages, total_pages)
+
+            let timeout = 5000
+            const check_page = () => {
+                timeout -= 100
+                if (timeout == 0 || loading_page.thegraphics.length > 0 || loading_page.thetexts.length > 0 || loading_page.thepaths.length > 0)
+                    setTimeout(() => this.parseCampaign(cb), 1000)
+                else
+                    setTimeout(check_page, 100)
+            }
+            return setTimeout(check_page, 100)
         }
 
 
@@ -510,22 +525,8 @@ class R20Exporter {
         result.account_id = d20_account_id
         result.campaign_id = campaign_id
         this.campaign = result
+        this._parseCampaignDelayed(result, cb)
 
-        this.loadArchivedPages()
-        this.console.log("Waiting 5 seconds for archived pages to finish loading")
-        this.console.setLabel1("Waiting for archived pages to finish loading (1/" + this.TOTAL_STEPS + ")")
-        this.console.setProgress1(0, this.TOTAL_STEPS)
-        let i = -1
-        const updateProgress = () => {
-            i += 1
-            this.console.setLabel2("Waiting... " + (5 - i) + "s")
-            this.console.setProgress2(i, 5)
-            if (i <  5)
-                setTimeout(updateProgress, 1000)
-        }
-        updateProgress()
-
-        setTimeout(() => this._parseCampaignDelayed(result, cb), 5000)
         return result
     }
 
