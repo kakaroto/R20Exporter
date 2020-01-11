@@ -467,16 +467,15 @@ class R20Exporter {
         result.decks = this.parseDecks(Campaign.decks)
         result.tables = this.parseTables(Campaign.rollabletables)
         result.jukebox = Jukebox.playlist.toJSON()
+        result.jukeboxfolder = result.jukeboxfolder != "" ? JSON.parse(result.jukeboxfolder) : []
+        result.journalfolder = result.journalfolder != "" ? JSON.parse(result.journalfolder) : []
+        result.turnorder = result.turnorder != "" ? JSON.parse(result.turnorder) : []
+        this._addOrphanedElementsToFolder(result.jukeboxfolder, result.jukebox)
+        this._addOrphanedElementsToFolder(result.journalfolder, result.handouts)
         this._fetchChatArchive(result, done)
-        if (result.jukeboxfolder != "")
-            result.jukeboxfolder = JSON.parse(result.jukeboxfolder)
-        if (result.journalfolder != "")
-            result.journalfolder = JSON.parse(result.journalfolder)
-        if (result.turnorder != "")
-            result.turnorder = JSON.parse(result.turnorder)
         this.console.log("Download operations in progress : ", this._pending_operations.length)
         this.console.setProgress2(0, this._pending_operations.length)
-        this.console.setLabel1("Downloading Journal Resources (3/" + this.TOTAL_STEPS + ")")
+        this.console.setLabel1("Downloading Chat archive, Characters and Handout assets (3/" + this.TOTAL_STEPS + ")")
         this.console.setProgress1(2, this.TOTAL_STEPS)
         if (this.completedOperation(id))
             done()
@@ -634,15 +633,22 @@ class R20Exporter {
         return name
     }
 
-    _flattenJournalEntries(journal, _list = []) {
-        for (let entry of journal) {
+    _flattenFolderEntries(folder, _list = []) {
+        for (let entry of folder) {
             if (typeof(entry) == "string") {
                 _list.push(entry)
             } else {
-                this._flattenJournalEntries(entry.i, _list)
+                this._flattenFolderEntries(entry.i, _list)
             }
         }
         return _list
+    }
+    _addOrphanedElementsToFolder(folder, elements) {
+        const all_ids = this._flattenFolderEntries(folder)
+        for (let element of elements) {
+            if (!all_ids.includes(element.id))
+                folder.push(element.id)
+        }
     }
 
     _makeAddBlobToZip(folder, filename, finallyCB) {
@@ -817,24 +823,6 @@ class R20Exporter {
         if (this.campaign.journalfolder.length > 0) {
             let journal = this._addZipFolder(this.zip, "journal")
             this._addJournalToZip(journal, this.campaign.journalfolder, checkZipDone)
-            let all_ids = this._flattenJournalEntries(this.campaign.journalfolder)
-            let orphaned = []
-            let archived = []
-            for (let handout of this.campaign.handouts) {
-                if (!all_ids.includes(handout.id)) {
-                    orphaned.push(handout.id)
-                } else if (handout.archived) {
-                    archived.push(handout.id)
-                }
-            }
-            if (archived.length > 0) {
-                let folder = this._addZipFolder(journal, "Archived Handouts")
-                this._addJournalToZip(folder, archived, checkZipDone)
-            }
-            if (orphaned.length > 0) {
-                let folder = this._addZipFolder(journal, "Orphaned Handouts")
-                this._addJournalToZip(folder, orphaned, checkZipDone)
-            }
         }
 
         this.savingStep = 2
