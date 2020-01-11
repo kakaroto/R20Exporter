@@ -573,6 +573,10 @@ class R20Exporter {
     downloadResource(url, cb, errorCB = null) {
         const id = this.newPendingOperation()
 
+        // Security in Chrome prevents getting http urls entirely.
+        if (window.location.protocol === "https:" && url.startsWith("http:"))
+            url = "https:" + url.slice(6)
+
         fetch(url).then((response) => {
             if (response.status == 200 || response.status == 0) {
                 return Promise.resolve(response.blob())
