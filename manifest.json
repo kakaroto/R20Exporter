@@ -25,7 +25,6 @@
 				"*://app.roll20.net/editor/"
 			],
 			"js": [
-				"libs/jquery-3.4.1.min.js",
 				"src/R20ContentScript.js"
 			],
       "run_at": "document_idle"

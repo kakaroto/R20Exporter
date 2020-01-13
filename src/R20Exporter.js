@@ -202,8 +202,11 @@ class R20Exporter {
                     const percent = 100 * current / total
                     this.console.setProgress2(current, total)
                     this.console.setLabel2("Generating ZIP file (" + percent.toFixed(2) + "%)")
-                }, (message) => {
-                    this.console.log("Error creating zip file writer : ", message)
+                }, (event) => {
+                    let message = event;
+                    if (event && event.target && event.target.error)
+                        message = event.target.error;
+                    this.console.error("Error creating zip file writer : ", message)
                 })
             })
     }
@@ -1045,6 +1048,10 @@ class ModalWindow {
                 background-color: gold;
                 font-style: italic;
             }
+            .modal-content .error {
+                background-color: red;
+                font-weight: bold;
+            }
         `.replace(/modal/g, modalClass)
         $("body").append($("<style>" + css + "</style>"))
         $("body").append(this.modal_div)
@@ -1067,6 +1074,7 @@ class ModalWindow {
         this.content.append(this.page_progress.getElement())
         this.content.append(this.second_progress.getElement())
         this.content.append($('<div class="warn"></div>'))
+        this.content.append($('<div class="error"></div>'))
         this.content.append($('<details class="log"><summary>Log</summary></details>'))
     }
 
@@ -1098,6 +1106,14 @@ class ModalWindow {
             line += String(a) + " "
         }
         this.content.find(".warn").append($("<p>" + line.replace(/\n/g, "<br/>") + "</p"))
+    }
+    error(...args) {
+        console.error(...args)
+        let line = ""
+        for (let a of args) {
+            line += String(a) + " "
+        }
+        this.content.find(".error").append($("<p>" + line.replace(/\n/g, "<br/>") + "</p"))
     }
 
     setLabel1(label) {
@@ -1178,5 +1194,14 @@ class ProgressBar {
     }
 }
 
-exporter = new R20Exporter($("head title").text().trim().replace(" | Roll20", ""))
-document.addEventListener("R20ExporterZip", () => exporter.exportCampaignZip(), false)
+function addExportButton() {
+    exporter = new R20Exporter($("head title").text().trim().replace(" | Roll20", ""))
+    $('#r20exporter').remove();
+    let button = $('<a class="btn" id="r20exporter">Export Campaign to ZIP</a>');
+    let content = $("#mysettings .content");
+    content.prepend(button);
+    button.css("width", "calc(100% - " + content.css("padding-right") + " - " + content.css("padding-left") + ")");
+    button.click(() => exporter.exportCampaignZip());
+}
+
+addExportButton();
