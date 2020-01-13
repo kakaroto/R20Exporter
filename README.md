@@ -11,7 +11,9 @@ This extension allows you to export a Roll 20 campaign and all of its assets int
 
 This extension is only available for Chrome, as it uses the local storage API to store the ZIP file, which can have many GBs of data in it. Firefox unfortunately does not support that API, so it cannot work for it.
 
-**To install,** please visit the [Chrome Webstore](https://chrome.google.com/webstore/detail/apbhfinbjilbkljgcnjjagecnciphnoi)
+**To install,** ~~please visit the [Chrome Webstore](https://chrome.google.com/webstore/detail/apbhfinbjilbkljgcnjjagecnciphnoi)~~
+
+> Until the extension is available on the chrome webstore (hoping any time now), you can install R20Exporter, by following the developer mode installation instructions that I wrote for my Beyond20 extension [here](https://github.com/kakaroto/Beyond20/blob/master/README.md#developer-mode-installation) but using [this link](https://github.com/kakaroto/R20Exporter/archive/master.zip) to download the R20Extension extension.
 
 To export your campaign go to the settings tab in the Roll20 page (the gear icon on the far right of the sidebar) and at the top you should see a button "**Export Campaign to ZIP**". Simply click on it, then wait until the ZIP file is generated and downloaded.
 
