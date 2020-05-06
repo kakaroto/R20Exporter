@@ -8,6 +8,14 @@ class R20Exporter {
         this._pending_operations = []
         this._total_size = 0
         this.console = new ModalWindow("Exporting Campaign to ZIP file", "r20exporter-modal")
+        this.clearConsole();
+        this.TOTAL_STEPS = 10;
+    }
+
+    clearConsole(title) {
+        if (title)
+            this.console.title = title;
+        this.console.clear();
         this.console.warn("Note that you should not open a different campaign in Roll20 as it can interfere with the download of some resources.")
         this.console.warn("<strong>DISCLAIMER: Please note that using this extension to export a module from the marketplace may infringe on the Marketplace Asset License and/or Roll20 EULA.</strong>")
         this.console.warn("<em>If you've found this extension useful, please consider supporting the author on <a id='r20exporter-patreon-link' href='#'>Patreon</a>. Thank you!</em>")
@@ -16,11 +24,6 @@ class R20Exporter {
             window.open('https://patreon.com/kakaroto')
         })
     }
-
-    get TOTAL_STEPS() {
-        return 10;
-    }
-
     newPendingOperation() {
         const id = Math.random().toString(36)
         this._pending_operations.push(id)
@@ -544,9 +547,15 @@ class R20Exporter {
     }
     saveCampaign(filename = null) {
         saveAs(this.jsonToBlob(this.campaign), filename || this.title + ".json")
+        this.console.warn("Congratulations! The campaign.json file was generated successfully.")
+        this.console.setProgress1(this.TOTAL_STEPS, this.TOTAL_STEPS)
+        setTimeout(() => this.console.hide(), 10000)
     }
 
     exportCampaignJson(filename = null) {
+        this.clearConsole("Exporting Campaign to JSON file")
+        this.TOTAL_STEPS = 3;
+        this.console.show()
         this.parseCampaign(() => this.saveCampaign(filename))
     }
 
@@ -994,6 +1003,8 @@ class R20Exporter {
 
 
     exportCampaignZip(filename = null) {
+        this.clearConsole("Exporting Campaign to ZIP file")
+        this.TOTAL_STEPS = 10;
         this.console.show()
         this.parseCampaign((campaign) => this.saveCampaignZip(filename))
     }
@@ -1204,16 +1215,20 @@ function addExportButton() {
     exporter = new R20Exporter($("head title").text().trim().replace(" | Roll20", ""))
     $('#r20exporter').remove();
     let button = $('<a class="btn" id="r20exporter">Export Campaign to ZIP</a>');
+    let buttonJson = $('<a class="btn" id="r20exporter">Export Campaign to JSON</a>');
     let content = $("#mysettings .content");
     content.prepend(button);
+    content.prepend(buttonJson);
     button.css("width", "calc(100% - " + content.css("padding-right") + " - " + content.css("padding-left") + ")");
     button.click(() => exporter.exportCampaignZip());
+    buttonJson.css("width", "calc(100% - " + content.css("padding-right") + " - " + content.css("padding-left") + ")");
+    buttonJson.click(() => exporter.exportCampaignJson());
 }
 
 // We need to create the campaign only after the DOM is loaded, otherwise when R20ES is installed, we get an error
 // unable to find '$' because r20es slows down the download of the jquery external script it seems.
 // We also need to be able to run it as standalone.
 if ($ !== undefined)
-addExportButton()
+    addExportButton()
 else
     window.addEventListener("DOMContentLoaded", addExportButton)
