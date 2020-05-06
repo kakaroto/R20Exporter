@@ -1204,4 +1204,10 @@ function addExportButton() {
     button.click(() => exporter.exportCampaignZip());
 }
 
-addExportButton();
+// We need to create the campaign only after the DOM is loaded, otherwise when R20ES is installed, we get an error
+// unable to find '$' because r20es slows down the download of the jquery external script it seems.
+// We also need to be able to run it as standalone.
+if ($ !== undefined)
+addExportButton()
+else
+    window.addEventListener("DOMContentLoaded", addExportButton)
