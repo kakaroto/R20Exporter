@@ -487,13 +487,19 @@ class R20Exporter {
     async parseCampaign(cb) {
         const character_num_attributes = Campaign.characters.models.map((c) => c.attribs.length)
         if (!character_num_attributes.all((n) => n > 0)) {
+            this._waiting_empty_sheets = this._waiting_empty_sheets || {}
             const num_loaded_sheets = character_num_attributes.count((n) => n > 0)
             this.console.log("Waiting for character sheets to finish loading (" + num_loaded_sheets + "/" + character_num_attributes.length + ")")
             this.console.setLabel1("Waiting for character sheets to finish loading (1/" + this.TOTAL_STEPS + ")")
             this.console.setLabel2(num_loaded_sheets + "/" + character_num_attributes.length + " character sheets loaded")
             this.console.setProgress1(0, this.TOTAL_STEPS)
             this.console.setProgress2(num_loaded_sheets, character_num_attributes.length)
-            return setTimeout(() => this.parseCampaign(cb), 1000)
+            this._waiting_empty_sheets[num_loaded_sheets] = (this._waiting_empty_sheets[num_loaded_sheets] || 0) + 1;
+            if (this._waiting_empty_sheets[num_loaded_sheets] > 30) {
+                this.console.log("Waited 30 seconds with no progress. Assuming Roll 20 is being weird...")
+            } else {
+                return setTimeout(() => this.parseCampaign(cb), 1000)
+            }
         }
 
         const archived_pages = Campaign.pages.models.filter((p) => !p.fullyLoaded)
