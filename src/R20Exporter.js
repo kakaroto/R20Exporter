@@ -541,7 +541,7 @@ class R20Exporter {
         return result
     }
 
-    
+
     jsonToBlob(obj) {
         return new Blob([JSON.stringify(obj, undefined, 4)], { "type": 'text/json' })
     }
@@ -588,8 +588,8 @@ class R20Exporter {
         img.src = url
     }
 
-    downloadResource(url, cb, errorCB = null) {
-        const id = this.newPendingOperation()
+    downloadResource(url, cb, errorCB = null, retryId = undefined, expBackoff = 1) {
+        const id = retryId || this.newPendingOperation()
 
         // Security in Chrome prevents getting http urls entirely.
         if (window.location.protocol === "https:" && url.startsWith("http:"))
@@ -598,6 +598,8 @@ class R20Exporter {
         fetch(url).then((response) => {
             if (response.status == 200 || response.status == 0) {
                 return Promise.resolve(response.blob())
+            } else if (response.status == 404 || response.status == 403) {
+                return Promise.reject(new Error("DO_NOT_RETRY"))
             } else {
                 return Promise.reject(new Error(response.statusText))
             }
@@ -608,9 +610,15 @@ class R20Exporter {
                 cb(blob)
         }
         ).catch((error) => {
-            this.completedOperation(id)
-            if (errorCB)
-                errorCB()
+            if (expBackoff < 30 && error.message != "DO_NOT_RETRY") {
+                setTimeout(() => {
+                    this.downloadResource(url, cb, errorCB, id, expBackoff * (1.5 + Math.random()))
+                }, expBackoff * 1000)
+            } else {
+                this.completedOperation(id)
+                if (errorCB)
+                    errorCB()
+            }
         }
         )
     }
@@ -1037,7 +1045,7 @@ class ModalWindow {
                 background-color: rgb(0,0,0); /* Fallback color */
                 background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
             }
-            
+
             /* Modal Content */
             .modal-content {
                 background-color: #fefefe;
