@@ -750,7 +750,10 @@ class R20Exporter {
                     if (name.slice(-4) != ".mp3")
                         name += ".mp3"
                     if (track.source == "My Audio") {
-                        url = "https://app.roll20.net/audio_library/play/" + this.campaign.campaign_id + "/" + track.track_id
+                        if (track.track_id.startsWith("http://") || track.track_id.startsWith("https://"))
+                            url = track.track_id
+                        else
+                            url = "https://app.roll20.net/audio_library/play/" + this.campaign.campaign_id + "/" + track.track_id
                     } else if (track.source == "Tabletop Audio") {
                         url = "https://s3.amazonaws.com/cdn.roll20.net/ttaudio/" + track.track_id.split("-")[0]
                     } else if (track.source == "Incompetech") {
