@@ -1071,13 +1071,18 @@ class R20Exporter {
             </h4>
         </div>
         <div id="collapseR20Exporter" class="panel-collapse collapse" data-v-3d6dac1a=""><div class="panel-body" data-v-3d6dac1a="">
-            <button class="btn btn-default" type="button" data-v-3d6dac1a="" style="margin-bottom: 0.5em;" id="r20exporter-zip">Export Campaign to ZIP</button>
-            <button class="btn btn-default" type="button" data-v-3d6dac1a="" style="margin-bottom: 0.5em;" id="r20exporter-json">Export Campaign to JSON</button>
+            <button class="btn btn-default" type="button" data-v-3d6dac1a="" style="margin-bottom: 0.5em;" id="r20exporter-zip" data-toggle="tooltip" title="Export the campaign and all its assets to a ZIP file">Export Campaign to ZIP</button>
+            <button class="btn btn-default" type="button" data-v-3d6dac1a="" style="margin-bottom: 0.5em;" id="r20exporter-json" data-toggle="tooltip" title="Export the campaign data (without assets) to a JSON file">Export Campaign to JSON</button>
+            <button class="btn btn-default" type="button" data-v-3d6dac1a="" style="margin-bottom: 0.5em; display: none;" id="r20exporter-log" data-toggle="tooltip" title="Show the Exporter dialog to view its log file">Show Export Log</button>
         </div>
         </div>
         `);
         $('#r20exporter-panel').remove();
         content.append(panel);
+        try {
+            // Enable bootstrap tooltips on hover
+            panel.find('[data-toggle="tooltip"]').tooltip();
+        } catch (err) {}
         const exporter = new R20Exporter($("head title").text().trim().replace(" | Roll20", ""))
         panel.find("#r20exporter-zip").on('click', () => exporter.exportCampaignZip());
         panel.find("#r20exporter-json").on('click', () => exporter.exportCampaignJson());
