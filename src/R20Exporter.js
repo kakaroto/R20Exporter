@@ -10,6 +10,7 @@ class R20Exporter {
         this.console = new R20ExporterModalWindow("Exporting Campaign to ZIP file", "r20exporter-modal")
         this.clearConsole();
         this.TOTAL_STEPS = 10;
+        this.constructor.singleton = this;
     }
 
     clearConsole(title) {
@@ -286,23 +287,34 @@ class R20Exporter {
         let data = character.toJSON()
         data.inplayerjournals = data.inplayerjournals.split(",")
         data.controlledby = data.controlledby.split(",")
-        if (data.bio != "") {
-            delete data.bio
-            const bio_id = this.newPendingOperation()
-            character._getLatestBlob("bio", (blob) => this.updateModel(data, "bio", blob, bio_id, cb))
-        }
-        if (data.gmnotes != "") {
-            delete data.gmnotes
-            const gmnotes_id = this.newPendingOperation()
-            character._getLatestBlob("gmnotes", (blob) => this.updateModel(data, "gmnotes", blob, gmnotes_id, cb))
-        }
-        if (data.defaulttoken != "") {
-            delete data.defaulttoken
-            const token_id = this.newPendingOperation()
-            character._getLatestBlob("defaulttoken", (blob) => this.updateModel(data, "defaulttoken", blob, token_id, cb))
-        }
         data.attributes = character.attribs.toJSON()
         data.abilities = character.abilities.toJSON()
+        if (window.is_gm || data.inplayerjournals.includes(window.d20_player_id)) {
+            if (data.bio != "") {
+                delete data.bio
+                const bio_id = this.newPendingOperation()
+                character._getLatestBlob("bio", (blob) => this.updateModel(data, "bio", blob, bio_id, cb))
+            }
+            if (window.is_gm && data.gmnotes != "") {
+                delete data.gmnotes
+                const gmnotes_id = this.newPendingOperation()
+                character._getLatestBlob("gmnotes", (blob) => this.updateModel(data, "gmnotes", blob, gmnotes_id, cb))
+            } else {
+                data.gmnotes = "";
+            }
+            if (data.defaulttoken != "") {
+                delete data.defaulttoken
+                const token_id = this.newPendingOperation()
+                character._getLatestBlob("defaulttoken", (blob) => this.updateModel(data, "defaulttoken", blob, token_id, cb))
+            }
+        } else {
+            data.bio = "";
+            data.gmnotes = "";
+            data.defaulttoken = "";
+            if (!this.hasPendingOperation()) {
+                cb();
+            }
+        }
         return data
     }
 
@@ -319,15 +331,25 @@ class R20Exporter {
         let data = handout.toJSON()
         data.inplayerjournals = data.inplayerjournals.split(",")
         data.controlledby = data.controlledby.split(",")
-        if (data.notes != "") {
-            delete data.notes
-            const notes_id = this.newPendingOperation()
-            handout._getLatestBlob("notes", (blob) => this.updateModel(data, "notes", blob, notes_id, cb))
-        }
-        if (data.gmnotes != "") {
-            delete data.gmnotes
-            const gmnotes_id = this.newPendingOperation()
-            handout._getLatestBlob("gmnotes", (blob) => this.updateModel(data, "gmnotes", blob, gmnotes_id, cb))
+        if (window.is_gm || data.inplayerjournals.includes(window.d20_player_id)) {
+            if (data.notes != "") {
+                delete data.notes
+                const notes_id = this.newPendingOperation()
+                handout._getLatestBlob("notes", (blob) => this.updateModel(data, "notes", blob, notes_id, cb))
+            }
+            if (window.is_gm && data.gmnotes != "") {
+                delete data.gmnotes
+                const gmnotes_id = this.newPendingOperation()
+                handout._getLatestBlob("gmnotes", (blob) => this.updateModel(data, "gmnotes", blob, gmnotes_id, cb))
+            } else {
+                data.gmnotes = "";
+            }
+        } else {
+            data.notes = "";
+            data.gmnotes = "";
+            if (!this.hasPendingOperation()) {
+                cb();
+            }
         }
         return data
     }
@@ -530,6 +552,9 @@ class R20Exporter {
         }
 
 
+        if (!window.is_gm) {
+            this.console.error("<strong>You are not the GM for this campaign. The Export will be incomplete</strong>")
+        }
         let result = Campaign.toJSON()
         result["R20Exporter_format"] = "1.0"
         result.campaign_title = this.title
