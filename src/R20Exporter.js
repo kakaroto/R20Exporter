@@ -212,6 +212,9 @@ class R20Exporter {
                     if (event && event.target && event.target.error)
                         message = event.target.error;
                     this.console.error("Error creating zip file writer : ", message)
+                    if (message.includes("QuotaExceededError")) {
+                        this.console.error("This error likely means you have run out of disk space, or you need to clear your browser's cache folder, or give app.roll20.net permission to write to local storage. If all else fails, exporting the campaign to JSON would work as an alternative.");
+                    }
                 })
             })
     }
