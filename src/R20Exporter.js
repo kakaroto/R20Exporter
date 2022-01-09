@@ -7,7 +7,7 @@ class R20Exporter {
         this.zip = null
         this._pending_operations = []
         this._total_size = 0
-        this.console = new ModalWindow("Exporting Campaign to ZIP file", "r20exporter-modal")
+        this.console = new R20ExporterModalWindow("Exporting Campaign to ZIP file", "r20exporter-modal")
         this.clearConsole();
         this.TOTAL_STEPS = 10;
     }
@@ -1058,7 +1058,7 @@ class R20Exporter {
     }
 }
 
-class ModalWindow {
+class R20ExporterModalWindow {
     constructor(title = "", modalClass = "modal") {
         this.title = title
         const modal_div = $("body ." + modalClass)
@@ -1120,11 +1120,11 @@ class ModalWindow {
         $("body").append($("<style>" + css + "</style>"))
         $("body").append(this.modal_div)
         this.content = this.modal_div.find("." + modalClass + "-content")
-        this.main_progress = new ProgressBar()
+        this.main_progress = new R20ExporterProgressBar()
         this.mp_current = this.mp_total = 1
-        this.second_progress = new ProgressBar()
+        this.second_progress = new R20ExporterProgressBar()
         this.sp_current = this.sp_total = 1
-        this.page_progress = new ProgressBar()
+        this.page_progress = new R20ExporterProgressBar()
         this.pp_current = this.pp_total = 1
         this.setPageLabel(null)
         this.clear()
@@ -1221,7 +1221,7 @@ class ModalWindow {
 }
 
 
-class ProgressBar {
+class R20ExporterProgressBar {
     constructor(label = "", current = 0, total = 100) {
         this.progress = $(`<div style="width: 100%; background-color: grey; margin: 5px">
                                <span style="float: left; position: relative; left: 50%; line-height: 20px">
