@@ -1020,6 +1020,42 @@ class R20Exporter {
         this.parseCampaign((campaign) => this.saveCampaignZip(filename))
     }
 
+    
+    static documentModified(mutations, observer) {
+        const added = this.addExportButton(false);
+        if (added) {
+            observer.disconnect();
+        }
+    }
+    static addExportButton(observe=true) {
+        const content = $("#settings-accordion.panel-group");
+        if (content.length === 0) {
+            if (observe) {
+                const observer = new window.MutationObserver(this.documentModified.bind(this));
+                observer.observe(document, { subtree: true, childList: true });
+            }
+            return false;
+        }
+        const panel = $(`
+        <div class="panel panel-default" id="r20exporter-panel" data-v-3d6dac1a="" data-v-5a70c1ce="">
+        <div class="panel-heading" data-toggle="collapse" data-parent="#settings-accordion" href="#collapseR20Exporter" data-v-3d6dac1a="">
+            <h4 class="panel-title" data-v-3d6dac1a="">
+            <a class="accordion-toggle" data-toggle="collapse" data-parent="#settings-accordion" href="#collapseR20Exporter" data-v-3d6dac1a=""> R20Exporter </a>
+            </h4>
+        </div>
+        <div id="collapseR20Exporter" class="panel-collapse collapse" data-v-3d6dac1a=""><div class="panel-body" data-v-3d6dac1a="">
+            <button class="btn btn-default" type="button" data-v-3d6dac1a="" style="margin-bottom: 0.5em;" id="r20exporter-zip">Export Campaign to ZIP</button>
+            <button class="btn btn-default" type="button" data-v-3d6dac1a="" style="margin-bottom: 0.5em;" id="r20exporter-json">Export Campaign to JSON</button>
+        </div>
+        </div>
+        `);
+        $('#r20exporter-panel').remove();
+        content.append(panel);
+        const exporter = new R20Exporter($("head title").text().trim().replace(" | Roll20", ""))
+        panel.find("#r20exporter-zip").on('click', () => exporter.exportCampaignZip());
+        panel.find("#r20exporter-json").on('click', () => exporter.exportCampaignJson());
+        return true;
+    }
 }
 
 class ModalWindow {
@@ -1222,24 +1258,11 @@ class ProgressBar {
     }
 }
 
-function addExportButton() {
-    exporter = new R20Exporter($("head title").text().trim().replace(" | Roll20", ""))
-    $('#r20exporter').remove();
-    let button = $('<a class="btn" id="r20exporter">Export Campaign to ZIP</a>');
-    let buttonJson = $('<a class="btn" id="r20exporter">Export Campaign to JSON</a>');
-    let content = $("#mysettings .content");
-    content.prepend(button);
-    content.prepend(buttonJson);
-    button.css("width", "calc(100% - " + content.css("padding-right") + " - " + content.css("padding-left") + ")");
-    button.click(() => exporter.exportCampaignZip());
-    buttonJson.css("width", "calc(100% - " + content.css("padding-right") + " - " + content.css("padding-left") + ")");
-    buttonJson.click(() => exporter.exportCampaignJson());
-}
 
 // We need to create the campaign only after the DOM is loaded, otherwise when R20ES is installed, we get an error
 // unable to find '$' because r20es slows down the download of the jquery external script it seems.
 // We also need to be able to run it as standalone.
 if (window.$ !== undefined)
-    addExportButton()
+    R20Exporter.addExportButton()
 else
-    window.addEventListener("DOMContentLoaded", addExportButton)
+    window.addEventListener("DOMContentLoaded", () => R20Exporter.addExportButton())
