@@ -200,7 +200,8 @@ class R20Exporter {
             this._exportZip(zipFs, fileEntry, () => {
                     this.console.warn("Congratulations! The Campaign.zip file was generated successfully.\nStarting download.")
                     this.console.setProgress1(this.TOTAL_STEPS, this.TOTAL_STEPS)
-                    setTimeout(() => this.console.hide(), 10000)
+                    setTimeout(() => this.console.hide(), 10000);
+                    $("#r20exporter-log").show();
                     fileEntry.file((f) => saveAs(f, filename))
                 }, (current, total) => {
                     const percent = 100 * current / total
@@ -574,7 +575,8 @@ class R20Exporter {
         saveAs(this.jsonToBlob(this.campaign), filename || this.title + ".json")
         this.console.warn("Congratulations! The campaign.json file was generated successfully.")
         this.console.setProgress1(this.TOTAL_STEPS, this.TOTAL_STEPS)
-        setTimeout(() => this.console.hide(), 10000)
+        setTimeout(() => this.console.hide(), 10000);
+        $("#r20exporter-log").show();
     }
 
     exportCampaignJson(filename = null) {
@@ -1079,6 +1081,7 @@ class R20Exporter {
         const exporter = new R20Exporter($("head title").text().trim().replace(" | Roll20", ""))
         panel.find("#r20exporter-zip").on('click', () => exporter.exportCampaignZip());
         panel.find("#r20exporter-json").on('click', () => exporter.exportCampaignJson());
+        panel.find("#r20exporter-log").on('click', () => exporter.console.show());
         return true;
     }
 }
