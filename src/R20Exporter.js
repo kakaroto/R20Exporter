@@ -448,12 +448,8 @@ class R20Exporter {
             if (content.startsWith(prefix)) {
                 const start = prefix.length
                 const end = content.indexOf("\";", start)
-                try {
-                    const chat = atob(content.slice(start, end))
-                    obj.chat_archive = JSON.parse(chat)
-                } catch (e) {
-                    this.console.log("Unable to parse chat data: ", e)
-                }
+                const chat = atob(content.slice(start, end))
+                obj.chat_archive = JSON.parse(chat)
                 break
             }
         }
@@ -462,6 +458,7 @@ class R20Exporter {
     _fetchChatArchive(obj, done) {
         const id = this.newPendingOperation()
         const errorcb = () => {
+            obj.chat_archive = [];
             if (this.completedOperation(id) && done)
                 done()
         }
@@ -470,7 +467,12 @@ class R20Exporter {
             f.onerror = errorcb
             f.onabort = errorcb
             f.onload = () => {
-                this._parseChatArchiveHTML(obj, f.result)
+                try {
+                    this._parseChatArchiveHTML(obj, f.result)
+                } catch (err) {
+                    this.console.log("Unable to parse chat data: ", err)
+                    obj.chat_archive = [];
+                }
                 if (this.completedOperation(id) && done)
                     done()
             }
