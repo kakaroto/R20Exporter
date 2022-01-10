@@ -1,9 +1,6 @@
 This extension allows you to export a Roll 20 campaign and all of its assets into a ZIP file for backup/archiving purposes.
 
 
-## **Note: Today (January 6th 2022), Roll 20 has updated their settings interface which prevents the exporter from adding its button to its interface. I will be updating the extension soon to fix that. In the meantime, press F12 in Chrome to open the devtools console, and type in it : `exporter.exportCampaignZip()` to start the export process manually.**
-
-
 > **DISCLAIMER**: 
 > The use of this tool is meant for backup and archiving purposes of your own campaigns. It is only meant and should only be used on campaigns with content that you own.  
 > Even if using it only on your own previously uploaded content, the use of this tool may still be against the [Roll 20 Marketplace Asset End User License Agreement](https://wiki.roll20.net/Marketplace_Asset_EULA)
