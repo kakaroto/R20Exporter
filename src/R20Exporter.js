@@ -514,6 +514,19 @@ class R20Exporter {
         if (this.completedOperation(id))
             done()
     }
+    async loadCharacterAttributes(model) {
+        if (!model.attribs.backboneFirebase) {
+            model.attribs.backboneFirebase = new BackboneFirebase(model.attribs);
+            model.abilities.backboneFirebase = new BackboneFirebase(model.abilities);
+
+            model.attribsHaveArrived = new Promise(async (resolve) => {
+                await model.attribs.backboneFirebase.reference.once('value');
+                await model.abilities.backboneFirebase.reference.once('value');
+                resolve();
+            });
+        }
+        return model.attribsHaveArrived;
+    }
 
     async parseCampaign(cb) {
         const character_num_attributes = Campaign.characters.models.map((c) => c.attribs.length)
@@ -525,11 +538,12 @@ class R20Exporter {
             this.console.setLabel2(num_loaded_sheets + "/" + character_num_attributes.length + " character sheets loaded")
             this.console.setProgress1(0, this.TOTAL_STEPS)
             this.console.setProgress2(num_loaded_sheets, character_num_attributes.length)
-            this._waiting_empty_sheets[num_loaded_sheets] = (this._waiting_empty_sheets[num_loaded_sheets] || 0) + 1;
+            this._waiting_empty_sheets[num_loaded_sheets] = (this._waiting_empty_sheets[num_loaded_sheets] || 0) + 5;
             if (this._waiting_empty_sheets[num_loaded_sheets] > 30) {
                 this.console.log("Waited 30 seconds with no progress. Assuming Roll 20 is being weird...")
             } else {
-                return setTimeout(() => this.parseCampaign(cb), 1000)
+                Campaign.characters.models.forEach(model => this.loadCharacterAttributes(model));
+                return setTimeout(() => this.parseCampaign(cb), 5000)
             }
         }
 
