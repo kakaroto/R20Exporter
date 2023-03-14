@@ -234,6 +234,8 @@ class R20Exporter {
         data.graphics = page.thegraphics ? page.thegraphics.toJSON() : []
         data.texts = page.thetexts ? page.thetexts.toJSON() : []
         data.paths = page.thepaths ? page.thepaths.toJSON() : []
+        data.doors = page.doors ? page.doors.toJSON() : []
+        data.windows = page.windows ? page.windows.toJSON() : []
         for (let path of data.paths) {
             path.path = JSON.parse(path.path)
         }
@@ -563,7 +565,9 @@ class R20Exporter {
             let timeout = 5000
             const check_page = () => {
                 timeout -= 100
-                if (timeout == 0 || loading_page.thegraphics.length > 0 || loading_page.thetexts.length > 0 || loading_page.thepaths.length > 0)
+                if (timeout == 0 || loading_page.thegraphics.length > 0 || 
+                    loading_page.thetexts.length > 0 || loading_page.thepaths.length > 0 ||
+                    loading_page.doors.length > 0 || loading_page.windows.length > 0)
                     setTimeout(() => this.parseCampaign(cb), 1000)
                 else
                     setTimeout(check_page, 100)
