@@ -1150,6 +1150,12 @@ class R20Exporter {
             <button class="btn btn-default" type="button" data-v-3d6dac1a="" style="margin-bottom: 0.5em;" id="r20exporter-zip" data-toggle="tooltip" title="Export the campaign and all its assets to a ZIP file">Export Campaign to ZIP</button>
             <button class="btn btn-default" type="button" data-v-3d6dac1a="" style="margin-bottom: 0.5em;" id="r20exporter-json" data-toggle="tooltip" title="Export the campaign data (without assets) to a JSON file">Export Campaign to JSON</button>
             <button class="btn btn-default" type="button" data-v-3d6dac1a="" style="margin-bottom: 0.5em; display: none;" id="r20exporter-log" data-toggle="tooltip" title="Show the Exporter dialog to view its log file">Show Export Log</button>
+            <div>
+              You can export your campaign to a ZIP file which will contain the entirety of the campaign as well as any assets (images, music, pdfs, etc..).
+            </div>
+            <div>
+              You can alternatively export to a JSON file which will be much smaller and faster, though it won't contain any assets and some assets (music and pdf) won't be downloaded externally as they use short-lived authenticated URLs.
+            </div>
         </div>
         </div>
         `);
