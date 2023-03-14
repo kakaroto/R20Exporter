@@ -65,6 +65,11 @@ class R20Exporter {
             if (handout)
                 return handout
         }
+        if (obj_type == "pdf" || obj_type === null) {
+            const pdf = this.campaign.pdfs.find(find_id)
+            if (pdf)
+                return pdf
+        }
         if (obj_type == "page" || obj_type === null) {
             const page = this.campaign.pages.find(find_id)
             if (page)
@@ -369,6 +374,25 @@ class R20Exporter {
         return array
     }
 
+    parsePDF(pdf, cb) {
+        let data = pdf.toJSON()
+        data.inplayerjournals = data.inplayerjournals.split(",")
+        data.controlledby = data.controlledby.split(",")
+        if (!this.hasPendingOperation()) {
+            cb();
+        }
+        return data
+    }
+
+    parsePDFs(pdfs, cb) {
+        let array = []
+        for (let pdf of pdfs.models) {
+            array.push(this.parsePDF(pdf, cb))
+        }
+        this.console.log("Finished parsing pdfs.")
+        return array
+    }
+
     parsePlayer(player) {
         let data = player.toJSON()
         if (data.journalfolderstatus)
@@ -496,6 +520,7 @@ class R20Exporter {
         this.console.setLabel1("Extracting Campaign data (2/" + this.TOTAL_STEPS + ")")
         this.console.setProgress1(1, this.TOTAL_STEPS)
         result.handouts = this.parseHandouts(Campaign.handouts, done)
+        result.pdfs = this.parsePDFs(Campaign.pdfs, done)
         result.characters = this.parseCharacters(Campaign.characters, done)
         result.pages = this.parsePages(Campaign.pages)
         result.players = this.parsePlayers(Campaign.players)
@@ -508,6 +533,7 @@ class R20Exporter {
         result.turnorder = result.turnorder != "" ? JSON.parse(result.turnorder) : []
         this._addOrphanedElementsToFolder(result.jukeboxfolder, result.jukebox)
         this._addOrphanedElementsToFolder(result.journalfolder, result.handouts)
+        this._addOrphanedElementsToFolder(result.journalfolder, result.pdfs)
         this._fetchChatArchive(result, done)
         this.console.log("Download operations in progress : ", this._pending_operations.length)
         this.console.setProgress2(0, this._pending_operations.length)
@@ -769,6 +795,26 @@ class R20Exporter {
             this._addFileToZip(folder, "gmnotes.html", new Blob([handout.gmnotes]))
     }
 
+    _addPDFToZip(folder, pdf, finallyCB) {
+        this._addFileToZip(folder, "pdf.json", this.jsonToBlob(pdf))
+        if ((pdf.avatar || "") != "")
+            this.downloadR20Resource(folder, "avatar", pdf.avatar, finallyCB)
+        if ((pdf.assetId || "") != "") {
+            const id = this.newPendingOperation()
+            fetch(`/user_assets/pdfs/${pdf.assetId}`)
+            .then(resp => {
+                return resp.json();
+            })
+            .then(json => {
+                this.downloadResource(json.asset_url, this._makeAddBlobToZip(folder, "file.pdf", finallyCB));
+                this.completedOperation(id);
+            })
+            .catch(err => {
+                this.completedOperation(id);
+            })
+        }
+    }
+
     _addJournalToZip(folder, journal, finallyCB) {
         let names = []
         for (let journal_entry of journal) {
@@ -785,8 +831,15 @@ class R20Exporter {
                         let char_dir = this._addZipFolder(folder, name)
                         this._addCharacterToZip(char_dir, character, finallyCB)
                     } else {
-                        this.console.log("Can't find handout with ID : ", journal_entry)
-                        continue
+                        let pdf = this.findID(journal_entry, "pdf")
+                        if (pdf !== null) {
+                            let name = this._makeNameUnique(names, pdf.name)
+                            let char_dir = this._addZipFolder(folder, name)
+                            this._addPDFToZip(char_dir, pdf, finallyCB)
+                        } else {
+                            this.console.log("Can't find handout with ID : ", journal_entry)
+                            continue
+                        }
                     }
                 }
             } else {
