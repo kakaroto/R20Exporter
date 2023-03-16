@@ -681,6 +681,19 @@ class R20Exporter {
         this.exportCampaignJson()
     }
 
+    async fetchWithTimeout(resource, options = {}) {
+        const { timeout = 60000 } = options;
+        options.timeout = timeout;
+        
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), timeout);
+        const response = await fetch(resource, {
+          ...options,
+          signal: controller.signal  
+        });
+        clearTimeout(id);
+        return response;
+    }
     _imageToBlob(img, id, cb) {
         let c = document.createElement("canvas")
         let ctx = c.getContext("2d")
@@ -713,7 +726,7 @@ class R20Exporter {
         if (window.location.protocol === "https:" && url.startsWith("http:"))
             url = "https:" + url.slice(6)
 
-        fetch(url).then((response) => {
+        this.fetchWithTimeout(url).then((response) => {
             if (response.status == 200 || response.status == 0) {
                 return Promise.resolve(response.blob())
             } else if (response.status == 404 || response.status == 403) {
@@ -844,7 +857,7 @@ class R20Exporter {
             this.downloadR20Resource(folder, "avatar", pdf.avatar, finallyCB)
         if ((pdf.assetId || "") != "") {
             const id = this.newPendingOperation()
-            fetch(`/user_assets/pdfs/${pdf.assetId}`)
+            this.fetchWithTimeout(`/user_assets/pdfs/${pdf.assetId}`)
             .then(resp => {
                 return resp.json();
             })
