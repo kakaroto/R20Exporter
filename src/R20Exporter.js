@@ -598,7 +598,8 @@ class R20Exporter {
                 timeout -= 100
                 if (timeout == 0 || loading_page.thegraphics.length > 0 || 
                     loading_page.thetexts.length > 0 || loading_page.thepaths.length > 0 ||
-                    loading_page.doors.length > 0 || loading_page.windows.length > 0)
+                    (loading_page.doors && loading_page.doors.length > 0) ||
+                    (loading_page.windows && loading_page.windows.length > 0))
                     setTimeout(() => this.parseCampaign(cb), 1000)
                 else
                     setTimeout(check_page, 100)
