@@ -670,7 +670,7 @@ class R20Exporter {
         img.src = url
     }
 
-    downloadResource(url, cb, errorCB = null, retryId = undefined, expBackoff = 1) {
+    downloadResource(url, cb, errorCB = null, retryId = undefined, expBackoff = 10) {
         const id = retryId || this.newPendingOperation()
 
         // Security in Chrome prevents getting http urls entirely.
@@ -693,6 +693,7 @@ class R20Exporter {
         }
         ).catch((error) => {
             if (expBackoff < 30 && error.message != "DO_NOT_RETRY") {
+                //this.console.log("Exponential backoff for: ", expBackoff, url);
                 setTimeout(() => {
                     this.downloadResource(url, cb, errorCB, id, expBackoff * (1.5 + Math.random()))
                 }, expBackoff * 1000)
