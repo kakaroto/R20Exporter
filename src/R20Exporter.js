@@ -1175,6 +1175,7 @@ class R20Exporter {
         panel.find("#r20exporter-zip").on('click', () => exporter.exportCampaignZip());
         panel.find("#r20exporter-json").on('click', () => exporter.exportCampaignJson());
         panel.find("#r20exporter-log").on('click', () => exporter.console.show());
+        window.R20Exporter_instance = exporter;
         return true;
     }
 }
