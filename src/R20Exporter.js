@@ -304,6 +304,31 @@ class R20Exporter {
             cb()
     }
 
+    getLatestBlob(model, field, data, op_id, cb) {
+        const originalValue = model[field];
+        try {
+            model._getLatestBlob(field, (blob) => this.updateModel(data, "bio", blob, op_id, cb));
+        } catch (err) {}
+        // Check for timeout when trying to get latest blob
+        const _checkBlobTimeout = (lastNumOperations) => {
+            if (!this.isPendingOperation(op_id)) return;
+            if (lastNumOperations !== this.numPendingOperations) {
+                // Reschedule the check
+                lastNumOperations = this.numPendingOperations;
+                setTimeout(() => _checkBlobTimeout(lastNumOperations), 10000);
+                return;
+            }
+            // Num operations didn't change, so timeout one of the ops
+            this.console.log("Timeout waiting for blob from Roll20");
+            if (model[field] === originalValue) {
+                model[field] = "";
+            }
+            if (this.completedOperation(op_id) && cb)
+                cb()
+        }
+        const lastNumOperations = this.numPendingOperations;
+        setTimeout(() => _checkBlobTimeout(lastNumOperations), 10000);
+    }
 
     parseCharacter(character, cb) {
         let data = character.toJSON()
@@ -315,19 +340,19 @@ class R20Exporter {
             if (data.bio != "") {
                 delete data.bio
                 const bio_id = this.newPendingOperation()
-                character._getLatestBlob("bio", (blob) => this.updateModel(data, "bio", blob, bio_id, cb))
+                this.getLatestBlob(character, "bio", data, bio_id, cb);
             }
             if (window.is_gm && data.gmnotes != "") {
                 delete data.gmnotes
                 const gmnotes_id = this.newPendingOperation()
-                character._getLatestBlob("gmnotes", (blob) => this.updateModel(data, "gmnotes", blob, gmnotes_id, cb))
+                this.getLatestBlob(character, "gmnotes", data, gmnotes_id, cb);
             } else {
                 data.gmnotes = "";
             }
             if (data.defaulttoken != "") {
                 delete data.defaulttoken
                 const token_id = this.newPendingOperation()
-                character._getLatestBlob("defaulttoken", (blob) => this.updateModel(data, "defaulttoken", blob, token_id, cb))
+                this.getLatestBlob(character, "defaulttoken", data, token_id, cb);
             }
         } else {
             data.bio = "";
@@ -357,12 +382,12 @@ class R20Exporter {
             if (data.notes != "") {
                 delete data.notes
                 const notes_id = this.newPendingOperation()
-                handout._getLatestBlob("notes", (blob) => this.updateModel(data, "notes", blob, notes_id, cb))
+                this.getLatestBlob(handout, "notes", data, notes_id, cb);
             }
             if (window.is_gm && data.gmnotes != "") {
                 delete data.gmnotes
                 const gmnotes_id = this.newPendingOperation()
-                handout._getLatestBlob("gmnotes", (blob) => this.updateModel(data, "gmnotes", blob, gmnotes_id, cb))
+                this.getLatestBlob(handout, "gmnotes", data, gmnotes_id, cb);
             } else {
                 data.gmnotes = "";
             }
