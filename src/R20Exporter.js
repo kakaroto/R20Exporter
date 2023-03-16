@@ -507,7 +507,12 @@ class R20Exporter {
             }
             f.readAsText(blob)
         }
-        this.downloadResource("https://app.roll20.net/campaigns/chatarchive/" + obj.campaign_id + "/?p=1&onePage=true", cb, errorcb)
+        // Disable backoff on download of chat archive
+        this.downloadResource(`https://app.roll20.net/campaigns/chatarchive/${obj.campaign_id}/?p=1&onePage=true`, cb, () => {
+            // Downloading chat archive failed, possibly because chat is too big and it times out.
+            // Download the first (most recent) page only, in that case
+            this.downloadResource(`https://app.roll20.net/campaigns/chatarchive/${obj.campaign_id}/?p=1`, cb, errorcb, undefined, 30);
+        }, undefined, 30)
     }
 
     _parseCampaignDelayed(result, cb) {
