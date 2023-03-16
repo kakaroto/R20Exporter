@@ -5,7 +5,7 @@ class R20Exporter {
         this.title = title
         this.campaign = {}
         this.zip = null
-        this._pending_operations = []
+        this._pending_operations = new Set()
         this._total_size = 0
         this.console = new R20ExporterModalWindow("Exporting Campaign to ZIP file", "r20exporter-modal")
         this.clearConsole();
@@ -26,29 +26,40 @@ class R20Exporter {
         })
     }
     newPendingOperation() {
-        const id = Math.random().toString(36)
-        this._pending_operations.push(id)
+        let id = Math.random().toString(36);
+        while (this.isPendingOperation(id)) {
+            id = Math.random().toString(36);
+        }
+        this._pending_operations.add(id)
         this._updateSecondProgress()
         return id
     }
 
     hasPendingOperation() {
-        return this._pending_operations.length > 0
+        return this._pending_operations.size > 0
     }
 
     completedOperation(id) {
-        this._pending_operations.remove(id)
+        this._pending_operations.delete(id)
         this._updateSecondProgress()
         return !this.hasPendingOperation()
     }
 
+    isPendingOperation(id) {
+        return this._pending_operations.has(id)
+    }
+
     clearPendingOperations() {
-        this._pending_operations = []
+        this._pending_operations = new Set()
         this._updateSecondProgress()
     }
 
+    get numPendingOperations() {
+        return this._pending_operations.size
+    }
+
     _updateSecondProgress() {
-        let left = this._pending_operations.length
+        let left = this.numPendingOperations
         let total = this.console.second_progress.total
         this.console.setLabel2(left + " operations in progress")
         if (left > total)
@@ -540,8 +551,8 @@ class R20Exporter {
         this._addOrphanedElementsToFolder(result.journalfolder, result.handouts)
         this._addOrphanedElementsToFolder(result.journalfolder, result.pdfs)
         this._fetchChatArchive(result, done)
-        this.console.log("Download operations in progress : ", this._pending_operations.length)
-        this.console.setProgress2(0, this._pending_operations.length)
+        this.console.log("Download operations in progress : ", this.numPendingOperations)
+        this.console.setProgress2(0, this.numPendingOperations)
         this.console.setLabel1("Downloading Chat archive, Characters and Handout assets (3/" + this.TOTAL_STEPS + ")")
         this.console.setProgress1(2, this.TOTAL_STEPS)
         if (this.completedOperation(id))
@@ -1116,8 +1127,8 @@ class R20Exporter {
                 }, 0)
             }
             if (show_pending) {
-                this.console.log("Download operations in progress : ", this._pending_operations.length)
-                this.console.setProgress2(0, this._pending_operations.length)
+                this.console.log("Download operations in progress : ", this.numPendingOperations)
+                this.console.setProgress2(0, this.numPendingOperations)
             }
         }
     }
