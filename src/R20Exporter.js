@@ -305,9 +305,8 @@ class R20Exporter {
     }
 
     getLatestBlob(model, field, data, op_id, cb) {
-        const originalValue = model[field];
         try {
-            model._getLatestBlob(field, (blob) => this.updateModel(data, "bio", blob, op_id, cb));
+            model._getLatestBlob(field, (blob) => this.updateModel(data, field, blob, op_id, cb));
         } catch (err) {}
         // Check for timeout when trying to get latest blob
         const _checkBlobTimeout = (lastNumOperations) => {
@@ -320,8 +319,8 @@ class R20Exporter {
             }
             // Num operations didn't change, so timeout one of the ops
             this.console.log("Timeout waiting for blob from Roll20");
-            if (model[field] === originalValue) {
-                model[field] = "";
+            if (data[field] === undefined) {
+                data[field] = "";
             }
             if (this.completedOperation(op_id) && cb)
                 cb()
