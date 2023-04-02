@@ -693,22 +693,28 @@ class R20Exporter {
         clearTimeout(id);
         return response;
     }
-    _imageToBlob(img, id, cb) {
-        let c = document.createElement("canvas")
-        let ctx = c.getContext("2d")
-        c.width = img.naturalWidth
-        c.height = img.naturalHeight
-        ctx.drawImage(img, 0, 0)
-        c.toBlob((blob) => {
-            this.completedOperation(id)
-            cb(blob)
-        }, "image/jpeg", 0.75)
+    _imageToBlob(img, id, cb, errorCB) {
+        try {
+            let c = document.createElement("canvas")
+            let ctx = c.getContext("2d")
+            c.width = img.naturalWidth
+            c.height = img.naturalHeight
+            ctx.drawImage(img, 0, 0)
+            c.toBlob((blob) => {
+                this.completedOperation(id)
+                cb(blob)
+            }, "image/jpeg", 0.75)
+        } catch (err) {
+            this.console.error(err);
+            this.completedOperation(id);
+            errorCB();
+        }
     }
 
     downloadImageViaCanvas(url, cb, errorCB = null) {
         const id = this.newPendingOperation()
         let img = new Image()
-        img.onload = (ev) => this._imageToBlob(img, id, cb)
+        img.onload = (ev) => this._imageToBlob(img, id, cb, errorCB)
         img.onerror = (error) => {
             this.completedOperation(id)
             if (errorCB)
