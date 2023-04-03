@@ -713,15 +713,27 @@ class R20Exporter {
 
     downloadImageViaCanvas(url, cb, errorCB = null) {
         const id = this.newPendingOperation()
-        let img = new Image()
-        img.onload = (ev) => this._imageToBlob(img, id, cb, errorCB)
+        let img = new Image();
+        const timeoutId = setTimeout(() => {
+            // Interrupt download on timeout
+            img.src = "";
+            this.completedOperation(id);
+            if (errorCB)
+                errorCB()
+        }, 60000);
+        img.onload = (ev) => {
+            this._imageToBlob(img, id, cb, errorCB);
+            clearTimeout(timeoutId);
+        }
         img.onerror = (error) => {
-            this.completedOperation(id)
+            this.completedOperation(id);
+            clearTimeout(timeoutId);
             if (errorCB)
                 errorCB()
         }
         img.crossOrigin = ""
         img.src = url
+        
     }
 
     downloadResource(url, cb, errorCB = null, retryId = undefined, expBackoff = 10) {
