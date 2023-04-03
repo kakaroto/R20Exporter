@@ -703,7 +703,7 @@ class R20Exporter {
             c.toBlob((blob) => {
                 this.completedOperation(id)
                 cb(blob)
-            }, "image/jpeg", 0.75)
+            }, "image/png")
         } catch (err) {
             this.console.error(err);
             this.completedOperation(id);
