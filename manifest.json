@@ -1,6 +1,6 @@
 {
 	"name": "R20Exporter",
-	"version": "0.9.2",
+	"version": "0.9.3",
 	"manifest_version": 2,
 	"description": "Export a Roll20 Campaign with all its assets to a ZIP file.",
 	"permissions": [
