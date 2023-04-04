@@ -118,11 +118,15 @@ class R20Exporter {
     }
 
     _addFileToZip(zipFs, filename, content) {
-        zipFs.addBlob(filename, content)
-        if (content.size !== undefined) {
-            this._total_size += content.size
-        } else if (content.length !== undefined) {
-            this._total_size += content.length
+        try {
+            zipFs.addBlob(filename, content)
+            if (content.size !== undefined) {
+                this._total_size += content.size
+            } else if (content.length !== undefined) {
+                this._total_size += content.length
+            }
+        } catch(err) {
+            this.console.error(err);
         }
     }
 
@@ -843,7 +847,7 @@ class R20Exporter {
     _makeAddBlobToZip(folder, filename, finallyCB) {
         return (blob) => {
             this._addFileToZip(folder, filename, blob)
-            finallyCB()
+            finallyCB();
         }
     }
 
