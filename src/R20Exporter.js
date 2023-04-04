@@ -894,6 +894,7 @@ class R20Exporter {
             })
             .catch(err => {
                 this.completedOperation(id);
+                finallyCB();
             })
         }
     }
@@ -960,6 +961,7 @@ class R20Exporter {
                             return (url) => {
                                 const errorCB = () => {
                                     this.console.log("Couldn't download Jukebox audio from url : ", url)
+                                    finallyCB();
                                 }
                                 this.downloadResource(url, this._makeAddBlobToZip(folder, name, finallyCB), errorCB)
                                 this.completedOperation(id)
