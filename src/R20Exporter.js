@@ -778,6 +778,10 @@ class R20Exporter {
     }
 
     downloadResource(url, cb, errorCB = null, retryId = undefined, expBackoff = 10) {
+        if (!url) {
+            errorCB();
+            return;
+        }
         const id = retryId || this.newPendingOperation("Downloading resource " + url)
 
         // Security in Chrome prevents getting http urls entirely.
