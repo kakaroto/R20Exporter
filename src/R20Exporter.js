@@ -10,6 +10,7 @@ class R20Exporter {
         this.console = new R20ExporterModalWindow("Exporting Campaign to ZIP file", "r20exporter-modal")
         this.clearConsole();
         this.TOTAL_STEPS = 10;
+        this._DEBUG_OPS = false;
         this.constructor.singleton = this;
     }
 
@@ -25,12 +26,15 @@ class R20Exporter {
             window.open('https://patreon.com/kakaroto')
         })
     }
-    newPendingOperation() {
+    newPendingOperation(tag) {
         let id = Math.random().toString(36);
         while (this.isPendingOperation(id)) {
             id = Math.random().toString(36);
         }
         this._pending_operations.add(id)
+        if (this._DEBUG_OPS) {
+            this.console.log("Starting operation: " + tag + " : " + id);
+        }
         this._updateSecondProgress()
         return id
     }
@@ -41,6 +45,12 @@ class R20Exporter {
 
     completedOperation(id) {
         this._pending_operations.delete(id)
+        if (this._DEBUG_OPS) {
+            this.console.log("Completed operation: " + id + " : " + this._pending_operations.size + " operations left");
+            if (this._pending_operations.size < 5) {
+                this.console.log("Operations remaining: " + Array.from(this._pending_operations).join(","));
+            }
+        }
         this._updateSecondProgress()
         return !this.hasPendingOperation()
     }
@@ -270,7 +280,7 @@ class R20Exporter {
             } else {
                 // Archived pages are not loaded. We can tell them to load but we have
                 // no callbacks on when that is done, so we need to wait before parsing them.
-                const id = this.newPendingOperation()
+                const id = this.newPendingOperation("Parse page " + page.name);
                 const makeCB = (a, i, p) => {
                     return () => {
                         a.push(this.parsePage(p))
@@ -338,19 +348,19 @@ class R20Exporter {
         if (window.is_gm || data.inplayerjournals.includes(window.d20_player_id)) {
             if (data.bio != "") {
                 delete data.bio
-                const bio_id = this.newPendingOperation()
+                const bio_id = this.newPendingOperation("Parse bio from " + character.name)
                 this.getLatestBlob(character, "bio", data, bio_id, cb);
             }
             if (window.is_gm && data.gmnotes != "") {
                 delete data.gmnotes
-                const gmnotes_id = this.newPendingOperation()
+                const gmnotes_id = this.newPendingOperation("Parse gm notes from " + character.name)
                 this.getLatestBlob(character, "gmnotes", data, gmnotes_id, cb);
             } else {
                 data.gmnotes = "";
             }
             if (data.defaulttoken != "") {
                 delete data.defaulttoken
-                const token_id = this.newPendingOperation()
+                const token_id = this.newPendingOperation("Parse token from " + character.name)
                 this.getLatestBlob(character, "defaulttoken", data, token_id, cb);
             }
         } else {
@@ -380,12 +390,12 @@ class R20Exporter {
         if (window.is_gm || data.inplayerjournals.includes(window.d20_player_id)) {
             if (data.notes != "") {
                 delete data.notes
-                const notes_id = this.newPendingOperation()
+                const notes_id = this.newPendingOperation("Parse notes from " + handout.name)
                 this.getLatestBlob(handout, "notes", data, notes_id, cb);
             }
             if (window.is_gm && data.gmnotes != "") {
                 delete data.gmnotes
-                const gmnotes_id = this.newPendingOperation()
+                const gmnotes_id = this.newPendingOperation("Parse gm notes from " + handout.name)
                 this.getLatestBlob(handout, "gmnotes", data, gmnotes_id, cb);
             } else {
                 data.gmnotes = "";
@@ -520,7 +530,7 @@ class R20Exporter {
     }
 
     _fetchChatArchive(obj, done) {
-        const id = this.newPendingOperation()
+        const id = this.newPendingOperation("Fetching chat archive")
         const errorcb = () => {
             obj.chat_archive = [];
             if (this.completedOperation(id) && done)
@@ -556,7 +566,7 @@ class R20Exporter {
                 cb(result)
         }
         // Make sure we don't get callback called before we finish parsing all the items
-        const id = this.newPendingOperation()
+        const id = this.newPendingOperation("Parsing Campaign data")
         this.console.setLabel1("Extracting Campaign data (2/" + this.TOTAL_STEPS + ")")
         this.console.setProgress1(1, this.TOTAL_STEPS)
         result.handouts = this.parseHandouts(Campaign.handouts, done)
@@ -712,7 +722,7 @@ class R20Exporter {
     }
 
     downloadImageViaCanvas(url, cb, errorCB = null) {
-        const id = this.newPendingOperation()
+        const id = this.newPendingOperation("Downloading image via canvas " + url)
         let img = new Image();
         const timeoutId = setTimeout(() => {
             // Interrupt download on timeout
@@ -737,7 +747,7 @@ class R20Exporter {
     }
 
     downloadResource(url, cb, errorCB = null, retryId = undefined, expBackoff = 10) {
-        const id = retryId || this.newPendingOperation()
+        const id = retryId || this.newPendingOperation("Downloading resource " + url)
 
         // Security in Chrome prevents getting http urls entirely.
         if (window.location.protocol === "https:" && url.startsWith("http:"))
@@ -873,7 +883,7 @@ class R20Exporter {
         if ((pdf.avatar || "") != "")
             this.downloadR20Resource(folder, "avatar", pdf.avatar, finallyCB)
         if ((pdf.assetId || "") != "") {
-            const id = this.newPendingOperation()
+            const id = this.newPendingOperation("Adding PDF to zip: " + pdf.assetId)
             this.fetchWithTimeout(`/user_assets/pdfs/${pdf.assetId}`)
             .then(resp => {
                 return resp.json();
@@ -945,7 +955,7 @@ class R20Exporter {
                     } else if (track.source == "Battlebards") {
                         let filename = track.track_id.split(".mp3-")[0] + ".mp3"
                         filename = encodeURIComponent(filename.replace(/%20%2D%20/g, " - "))
-                        const id = this.newPendingOperation()
+                        const id = this.newPendingOperation("Downloading battlebards track " + filename)
                         const _makePostCB = (folder, name, finallyCB, id) => {
                             return (url) => {
                                 const errorCB = () => {
@@ -1008,7 +1018,7 @@ class R20Exporter {
         this.console.log("Saving Characters")
         this.console.setLabel1("Saving Characters (4/" + this.TOTAL_STEPS + ")")
         this.console.setProgress1(3, this.TOTAL_STEPS)
-        const id = this.newPendingOperation()
+        const id = this.newPendingOperation("Saving campaign zip characters")
         if (this.campaign.characters.length > 0) {
             const characters = this._addZipFolder(this.zip, "characters")
             let names = []
@@ -1028,7 +1038,7 @@ class R20Exporter {
         this.console.log("Saving Journal")
         this.console.setLabel1("Saving Journal handouts (5/" + this.TOTAL_STEPS + ")")
         this.console.setProgress1(4, this.TOTAL_STEPS)
-        const id = this.newPendingOperation()
+        const id = this.newPendingOperation("Saving campaign zip journal")
         if (this.campaign.journalfolder.length > 0) {
             let journal = this._addZipFolder(this.zip, "journal")
             this._addJournalToZip(journal, this.campaign.journalfolder, checkZipDone)
@@ -1040,7 +1050,7 @@ class R20Exporter {
     }
 
     _saveCampaignZipPage(checkZipDone) {
-        const id = this.newPendingOperation()
+        const id = this.newPendingOperation("saving campaign zip page")
         if (this.savingPageIdx >= this.campaign.pages.length) {
             this.savingStep = 4
             this.console.setPageLabel(null)
@@ -1077,7 +1087,7 @@ class R20Exporter {
         this.console.log("Saving Jukebox audio")
         this.console.setLabel1("Saving Jukebox audio (7/" + this.TOTAL_STEPS + ")")
         this.console.setProgress1(6, this.TOTAL_STEPS)
-        const id = this.newPendingOperation()
+        const id = this.newPendingOperation("saving campaign zip jukebox")
         if (this.campaign.jukeboxfolder.length > 0) {
             let jukebox = this._addZipFolder(this.zip, "jukebox")
             this._addPlaylistToZip(jukebox, this.campaign.jukeboxfolder, checkZipDone)
@@ -1092,7 +1102,7 @@ class R20Exporter {
         this.console.log("Saving Decks")
         this.console.setLabel1("Saving Decks (8/" + this.TOTAL_STEPS + ")")
         this.console.setProgress1(7, this.TOTAL_STEPS)
-        const id = this.newPendingOperation()
+        const id = this.newPendingOperation("Saving campaign zip decks")
         if (this.campaign.decks.length > 0) {
             let decks = this._addZipFolder(this.zip, "decks")
             let names = []
@@ -1118,7 +1128,7 @@ class R20Exporter {
         this.console.log("Saving Rollable Tables")
         this.console.setLabel1("Saving Rollable Tables (9/" + this.TOTAL_STEPS + ")")
         this.console.setProgress1(8, this.TOTAL_STEPS)
-        const id = this.newPendingOperation()
+        const id = this.newPendingOperation("Saving campaign zip tables")
         if (this.campaign.tables.length > 0) {
             let tables = this._addZipFolder(this.zip, "tables")
             let names = []
