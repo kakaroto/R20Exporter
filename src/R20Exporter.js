@@ -695,7 +695,7 @@ class R20Exporter {
     }
 
     async fetchWithTimeout(resource, options = {}, controller) {
-        const { timeout = 60000 } = options;
+        const { timeout = 120000 } = options;
         options.timeout = timeout;
         
         if (!controller) controller = new AbortController();
