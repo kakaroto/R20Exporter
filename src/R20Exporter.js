@@ -694,18 +694,43 @@ class R20Exporter {
         this.exportCampaignJson()
     }
 
-    async fetchWithTimeout(resource, options = {}) {
+    async fetchWithTimeout(resource, options = {}, controller) {
         const { timeout = 60000 } = options;
         options.timeout = timeout;
         
-        const controller = new AbortController();
-        const id = setTimeout(() => controller.abort(), timeout);
+        if (!controller) controller = new AbortController();
+        const id = setTimeout(() => {
+            this.console.log("Timeout trying to download " + resource);
+            controller.abort()
+        }, timeout);
         const response = await fetch(resource, {
           ...options,
           signal: controller.signal  
         });
         clearTimeout(id);
         return response;
+    }
+
+    // This function will check if the fetch is taking too long and abort it if there
+    // was no change in the number of pending operations since the last time it checked
+    // This is to prevent the fetch from hanging forever, but also avoid timing out a
+    // fetch that is actually taking a long time to complete due to slow network or because
+    // of too many concurrent requests
+    timeoutHangingFetch(controller, label, timeout=60000) {
+        this._timeoutFetchLastPending = 0;
+        const id = setInterval(() => checkForHanging(), timeout);
+        const checkForHanging = () => {
+            if (this._timeoutFetchLastPending !== this._pending_operations.size) {
+                // There was a change in the number of pending operations, so reset the timeout
+                this._timeoutFetchLastPending = this._pending_operations.size;
+                return;
+            }
+            this.console.log("Timeout downloading " + label);
+            controller.abort()
+            clearInterval(id);
+            this._timeoutFetchLastPending = this._pending_operations.size;
+        };
+        return id;
     }
     _imageToBlob(img, id, cb, errorCB) {
         try {
@@ -757,9 +782,12 @@ class R20Exporter {
         if (window.location.protocol === "https:" && url.startsWith("http:"))
             url = "https:" + url.slice(6)
 
-        this.fetchWithTimeout(url).then((response) => {
+        const controller = new AbortController();
+        let timeoutId = null;
+        this.fetchWithTimeout(url, {}, controller).then((response) => {
             if (response.status == 200 || response.status == 0) {
-                return Promise.resolve(response.blob())
+                timeoutId = this.timeoutHangingFetch(controller, url);
+                return Promise.resolve(response.blob());
             } else if (response.status == 404 || response.status == 403) {
                 return Promise.reject(new Error("DO_NOT_RETRY"))
             } else {
@@ -767,11 +795,13 @@ class R20Exporter {
             }
         }
         ).then((blob) => {
+            clearInterval(timeoutId);
             this.completedOperation(id)
             if (cb)
                 cb(blob)
         }
         ).catch((error) => {
+            clearInterval(timeoutId);
             if (expBackoff < 30 && error.message != "DO_NOT_RETRY") {
                 //this.console.log("Exponential backoff for: ", expBackoff, url);
                 setTimeout(() => {
@@ -888,15 +918,20 @@ class R20Exporter {
             this.downloadR20Resource(folder, "avatar", pdf.avatar, finallyCB)
         if ((pdf.assetId || "") != "") {
             const id = this.newPendingOperation("Adding PDF to zip: " + pdf.assetId)
-            this.fetchWithTimeout(`/user_assets/pdfs/${pdf.assetId}`)
+            const controller = new AbortController();
+            let timeoutId = null;
+            this.fetchWithTimeout(`/user_assets/pdfs/${pdf.assetId}`, {}, controller)
             .then(resp => {
+                timeoutId = this.timeoutHangingFetch(controller, `/user_assets/pdfs/${pdf.assetId}`);
                 return resp.json();
             })
             .then(json => {
-                this.downloadResource(json.asset_url, this._makeAddBlobToZip(folder, "file.pdf", finallyCB));
+                clearInterval(timeoutId);
+                this.downloadResource(json.asset_url, this._makeAddBlobToZip(folder, "file.pdf", finallyCB), finallyCB);
                 this.completedOperation(id);
             })
             .catch(err => {
+                clearInterval(timeoutId);
                 this.completedOperation(id);
                 finallyCB();
             })
