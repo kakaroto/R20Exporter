@@ -755,6 +755,8 @@ class R20Exporter {
         let img = new Image();
         const timeoutId = setTimeout(() => {
             // Interrupt download on timeout
+            img.onload = null;
+            img.onerror = null;
             img.src = "";
             this.completedOperation(id);
             if (errorCB)
