@@ -825,7 +825,9 @@ class R20Exporter {
     // Most avatar/imgsrc URLs use the 'med' filename, even for the huge map files. We should download the appropriate sized
     // file depending on the image size we are looking for. We just download the highest resolution file that we can instead.
     downloadR20Resource(folder, prefix, url, finallyCB, try_files = ["original", "max", "med", "thumb"], use_canvas = false) {
-        let filename = url.split("/").slice(-1)[0].split(".")[0]
+        let filenameParts = url.split("/").slice(-1)[0].split("?")[0].split(".")
+        let filename = filenameParts[0];
+        let ext = filenameParts.length > 1 ? filenameParts[filenameParts.length - 1] : "png";
         // This is needed so we download the higher res file first.
         // Unfortunately, there are some CORS issues sometimes, so if higher res file fails, download the lower one.
         if (try_files.length > 0) {
@@ -836,7 +838,7 @@ class R20Exporter {
                 try_files = [""]
             }
 
-            const successCB = this._makeAddBlobToZip(folder, prefix + ".png", finallyCB)
+            const successCB = this._makeAddBlobToZip(folder, `${prefix}.${ext}`, finallyCB)
             const errorCB = () => {
                 this.downloadR20Resource(folder, prefix, url, finallyCB, try_files.slice(1), use_canvas)
             }
