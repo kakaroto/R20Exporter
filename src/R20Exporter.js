@@ -267,7 +267,8 @@ class R20Exporter {
         data.doors = page.doors ? page.doors.toJSON() : []
         data.windows = page.windows ? page.windows.toJSON() : []
         for (let path of data.paths) {
-            path.path = JSON.parse(path.path)
+            path.path = path.path ? JSON.parse(path.path) : null;
+            path.points = path.points ? JSON.parse(path.points) : null;
         }
         for (let graphic of data.graphics) {
             if (graphic.sides)
