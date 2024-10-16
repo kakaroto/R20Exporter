@@ -12,12 +12,12 @@ function loadScript(url, cb) {
   (document.head || document.documentElement).appendChild(s);
 }
 
-loadScript(chrome.extension.getURL("libs/FileSaver/FileSaver.js"),
- () => loadScript(chrome.extension.getURL("libs/zipjs/zip.js"), 
-  () => loadScript(chrome.extension.getURL("libs/zipjs/zip-fs.js"), 
-    () => loadScript(chrome.extension.getURL("libs/zipjs/zip-ext.js"),
-      () => loadScript(chrome.extension.getURL("libs/zipjs/deflate.js"),
-        () => loadScript(chrome.extension.getURL("src/R20Exporter.js"))
+loadScript(chrome.runtime.getURL("libs/FileSaver/FileSaver.js"),
+ () => loadScript(chrome.runtime.getURL("libs/zipjs/zip.js"), 
+  () => loadScript(chrome.runtime.getURL("libs/zipjs/zip-fs.js"), 
+    () => loadScript(chrome.runtime.getURL("libs/zipjs/zip-ext.js"),
+      () => loadScript(chrome.runtime.getURL("libs/zipjs/deflate.js"),
+        () => loadScript(chrome.runtime.getURL("src/R20Exporter.js"))
         )
       )
     )
