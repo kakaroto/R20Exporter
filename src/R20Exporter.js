@@ -779,6 +779,9 @@ class R20Exporter {
     }
 
     downloadResource(url, cb, errorCB = null, retryId = undefined, expBackoff = 10) {
+        // Some older resources still use the s3.amazonaws.com URL which fails due to CORS but Roll20 changes 
+        // those URLs automatically to files.d20.io, so we do the same here
+        url = url.replace("https://s3.amazonaws.com/files.d20.io/", "https://files.d20.io/")
         if (!url) {
             errorCB();
             return;
@@ -826,6 +829,9 @@ class R20Exporter {
     // Most avatar/imgsrc URLs use the 'med' filename, even for the huge map files. We should download the appropriate sized
     // file depending on the image size we are looking for. We just download the highest resolution file that we can instead.
     downloadR20Resource(folder, prefix, url, finallyCB, try_files = ["original", "max", "med", "thumb"], use_canvas = false) {
+        // Some older resources still use the s3.amazonaws.com URL which fails due to CORS but Roll20 changes 
+        // those URLs automatically to files.d20.io, so we do the same here
+        url = url.replace("https://s3.amazonaws.com/files.d20.io/", "https://files.d20.io/")
         let filenameParts = url.split("/").slice(-1)[0].split("?")[0].split(".")
         let filename = filenameParts[0];
         let ext = filenameParts.length > 1 ? filenameParts[filenameParts.length - 1] : "png";
